@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #FDFDF5; /* Chokka Cream */
+  color: #1a3325;
+}
+
+/* Custom Scrollbar to match the vibe */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #FDFDF5;
+}
+::-webkit-scrollbar-thumb {
+  background: #6DBE86;
+  border: 2px solid #1a3325;
+  border-radius: 5px;
+}
