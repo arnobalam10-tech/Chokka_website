@@ -9,6 +9,9 @@ export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
   
+  // --- RESTORED: Reviews State ---
+  const [reviews, setReviews] = useState([]); 
+  
   // STATE: Product Info
   const [product, setProduct] = useState({
     id: 1,
@@ -18,15 +21,23 @@ export default function HomePage() {
 
   // FETCH DATA
   useEffect(() => {
-    fetch('https://chokka-server.onrender.com/api/product')
+    const API_URL = 'https://chokka-server.onrender.com'; // Ensure this matches your live backend
+
+    fetch(`${API_URL}/api/product`)
       .then(res => res.json())
       .then(data => { if (data?.price) setProduct(data); })
       .catch(err => console.error("API Error"));
 
-    fetch('https://chokka-server.onrender.com/api/gallery')
+    fetch(`${API_URL}/api/gallery`)
       .then(res => res.json())
       .then(data => setGallery(data || []))
-      .catch(() => {}); 
+      .catch(() => {});
+
+    // --- RESTORED: Fetch Reviews ---
+    fetch(`${API_URL}/api/reviews`)
+      .then(res => res.json())
+      .then(data => setReviews(data || []))
+      .catch(() => {});
   }, []);
 
   return (
@@ -35,7 +46,6 @@ export default function HomePage() {
       {/* --- NAVBAR --- */}
       <nav className="fixed top-0 w-full z-40 px-6 py-3 flex justify-between items-center bg-[#f8f5e6]/95 backdrop-blur-md border-b-4 border-[#1a3325]">
         <div className="flex items-center gap-4 cursor-pointer">
-           {/* LOGO */}
            <motion.img 
              whileHover={{ rotate: -5, scale: 1.05 }} 
              src="/logo.png.jpeg" 
@@ -45,12 +55,10 @@ export default function HomePage() {
            <span className="font-black text-xl tracking-widest uppercase hidden md:block">The Syndicate</span>
         </div>
         
-        {/* Desktop Menu */}
         <div className="hidden md:flex items-center gap-8 font-bold text-sm uppercase tracking-widest">
             <a href="#story" className="hover:text-[#2e8b57] transition-colors">The Story</a>
             <a href="#features" className="hover:text-[#2e8b57] transition-colors">Cards</a>
-            <a href="#visuals" className="hover:text-[#2e8b57] transition-colors">Product Visuals</a>
-            
+            <a href="#visuals" className="hover:text-[#2e8b57] transition-colors">Visuals</a>
             <button 
                 onClick={() => setIsCheckoutOpen(true)}
                 className="bg-[#2e8b57] text-white px-6 py-2 border-2 border-[#1a3325] shadow-[4px_4px_0px_0px_rgba(26,51,37,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all flex items-center gap-2"
@@ -59,7 +67,6 @@ export default function HomePage() {
             </button>
         </div>
 
-        {/* Mobile Action (Replaced Menu with BUY Button) */}
         <button 
             onClick={() => setIsCheckoutOpen(true)}
             className="md:hidden bg-[#2e8b57] text-white px-4 py-2 font-bold text-xs uppercase tracking-widest border-2 border-[#1a3325] shadow-[2px_2px_0px_0px_rgba(26,51,37,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all flex items-center gap-2"
@@ -170,8 +177,6 @@ export default function HomePage() {
                 </div>
                 <span className="font-bold opacity-60 uppercase border-b-2 border-[#1a3325]">@TheSyndicateBD</span>
             </div>
-
-            {/* Dynamic Grid */}
             {gallery.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {gallery.map((img, idx) => (
@@ -181,20 +186,17 @@ export default function HomePage() {
                     ))}
                 </div>
             ) : (
-                /* Placeholder */
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 opacity-40">
                     {[1,2,3,4].map(i => (
-                        <div key={i} className="aspect-square bg-gray-300 border-4 border-[#1a3325] flex items-center justify-center font-bold text-xl uppercase">
-                            Card Preview {i}
-                        </div>
+                        <div key={i} className="aspect-square bg-gray-300 border-4 border-[#1a3325] flex items-center justify-center font-bold text-xl uppercase">Card Preview {i}</div>
                     ))}
                 </div>
             )}
         </div>
       </section>
 
-      {/* --- REVIEWS MARQUEE --- */}
-      <ReviewMarquee />
+      {/* --- RESTORED: Passing Reviews Data --- */}
+      <ReviewMarquee reviews={reviews} />
 
       {/* --- FOOTER --- */}
       <footer className="bg-[#1a3325] text-[#f8f5e6] py-16 text-center border-t-4 border-[#2e8b57]">
