@@ -29,11 +29,11 @@ export default function Admin() {
   }, []);
 
   // --- API CALLS ---
-  const fetchOrders = () => fetch('http://localhost:5000/api/orders').then(r => r.json()).then(setOrders);
-  const fetchProduct = () => fetch('http://localhost:5000/api/product').then(r => r.json()).then(setProduct);
-  const fetchCoupons = () => fetch('http://localhost:5000/api/coupons').then(r => r.json()).then(setCoupons);
-  const fetchReviews = () => fetch('http://localhost:5000/api/reviews').then(r => r.json()).then(setReviews);
-  const fetchGallery = () => fetch('http://localhost:5000/api/gallery').then(r => r.json()).then(setGallery);
+  const fetchOrders = () => fetch('https://chokka-server.onrender.com/api/orders').then(r => r.json()).then(setOrders);
+  const fetchProduct = () => fetch('https://chokka-server.onrender.com/api/product').then(r => r.json()).then(setProduct);
+  const fetchCoupons = () => fetch('https://chokka-server.onrender.com/api/coupons').then(r => r.json()).then(setCoupons);
+  const fetchReviews = () => fetch('https://chokka-server.onrender.com/api/reviews').then(r => r.json()).then(setReviews);
+  const fetchGallery = () => fetch('https://chokka-server.onrender.com/api/gallery').then(r => r.json()).then(setGallery);
 
   // --- NEW: SALES ANALYTICS LOGIC ---
   const getStats = () => {
@@ -71,7 +71,7 @@ export default function Admin() {
     if(!confirm(`Send Order #${order.id} to Steadfast Courier?`)) return;
     setProcessingOrder(order.id);
     try {
-        const response = await fetch('http://localhost:5000/api/steadfast/create', {
+        const response = await fetch('https://chokka-server.onrender.com/api/steadfast/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -103,7 +103,7 @@ export default function Admin() {
 
     setIsBulkSending(true);
     try {
-        const response = await fetch('http://localhost:5000/api/steadfast/bulk-create', {
+        const response = await fetch('https://chokka-server.onrender.com/api/steadfast/bulk-create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ orders: pendingOrders })
@@ -119,7 +119,7 @@ export default function Admin() {
   };
 
   const updateOrderStatus = async (id, newStatus, trackingCode = null) => {
-    await fetch(`http://localhost:5000/api/orders/${id}/status`, {
+    await fetch(`https://chokka-server.onrender.com/api/orders/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, tracking_code: trackingCode })
@@ -129,7 +129,7 @@ export default function Admin() {
 
   const deleteOrder = async (id) => {
     if(!confirm("⚠️ Delete this order permanently?")) return;
-    await fetch(`http://localhost:5000/api/orders/${id}`, { method: 'DELETE' });
+    await fetch(`https://chokka-server.onrender.com/api/orders/${id}`, { method: 'DELETE' });
     fetchOrders();
   };
 
@@ -143,18 +143,18 @@ export default function Admin() {
   };
 
   // --- OTHER ACTIONS ---
-  const updateProduct = async () => { const res = await fetch('http://localhost:5000/api/product', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product) }); if(res.ok) alert("✅ Updated!"); };
-  const createCoupon = async (e) => { e.preventDefault(); await fetch('http://localhost:5000/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
-  const createReview = async (e) => { e.preventDefault(); await fetch('http://localhost:5000/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_name: e.target.name.value, rating: e.target.rating.value, comment: e.target.comment.value }) }); e.target.reset(); fetchReviews(); };
-  const deleteReview = async (id) => { if(!confirm("Delete?")) return; await fetch(`http://localhost:5000/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
-  const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`http://localhost:5000/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
+  const updateProduct = async () => { const res = await fetch('https://chokka-server.onrender.com/api/product', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product) }); if(res.ok) alert("✅ Updated!"); };
+  const createCoupon = async (e) => { e.preventDefault(); await fetch('https://chokka-server.onrender.com/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
+  const createReview = async (e) => { e.preventDefault(); await fetch('https://chokka-server.onrender.com/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_name: e.target.name.value, rating: e.target.rating.value, comment: e.target.comment.value }) }); e.target.reset(); fetchReviews(); };
+  const deleteReview = async (id) => { if(!confirm("Delete?")) return; await fetch(`https://chokka-server.onrender.com/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
+  const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`https://chokka-server.onrender.com/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
   
   const handleUploadAndSave = async (e) => {
     e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true);
     try {
         const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error;
         const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
-        await fetch('http://localhost:5000/api/gallery', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption }) });
+        await fetch('https://chokka-server.onrender.com/api/gallery', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption }) });
         alert("✅ Upload Successful!"); e.target.reset(); fetchGallery();
     } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); }
   };

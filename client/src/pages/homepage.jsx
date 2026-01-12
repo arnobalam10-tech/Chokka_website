@@ -18,12 +18,12 @@ export default function HomePage() {
 
   // FETCH DATA
   useEffect(() => {
-    fetch('http://localhost:5000/api/product')
+    fetch('https://chokka-server.onrender.com/api/product')
       .then(res => res.json())
       .then(data => { if (data?.price) setProduct(data); })
       .catch(err => console.error("API Error"));
 
-    fetch('http://localhost:5000/api/gallery')
+    fetch('https://chokka-server.onrender.com/api/gallery')
       .then(res => res.json())
       .then(data => setGallery(data || []))
       .catch(() => {}); 
