@@ -205,7 +205,7 @@ export default function HomePage() {
             <a href="https://www.instagram.com/chokka.co/" target="_blank" rel="noopener noreferrer" className="hover:text-[#2e8b57]">Instagram</a>
             <a href="https://www.facebook.com/chobify" target="_blank" rel="noopener noreferrer" className="hover:text-[#2e8b57]">Facebook</a>
         </div>
-        <p className="opacity-50 text-xs md:text-sm mb-8">© 2026 Chokka Collectives BD by ASHAB ALAM.</p>
+        <p className="opacity-50 text-xs md:text-sm mb-8">© 2026 Chokka Collectives BD</p>
         
         <button 
              onClick={() => setIsCheckoutOpen(true)}
