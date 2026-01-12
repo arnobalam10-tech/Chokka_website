@@ -1,214 +1,192 @@
 import React, { useState } from 'react';
-import { X, CheckCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { X, Check, Tag } from 'lucide-react';
 
 export default function CheckoutModal({ isOpen, onClose, product }) {
-  const [step, setStep] = useState(1); // 1=Form, 2=Processing, 3=Success
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
+    email: '',
     address: '',
     city: 'Dhaka',
-    email: '', // Optional
-    note: ''
+    couponCode: ''
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  
+  const [discount, setDiscount] = useState(0);
+  const [couponMsg, setCouponMsg] = useState('');
+  const [status, setStatus] = useState('idle');
 
-  // CALCULATIONS
-  const basePrice = product?.price || 360;
-  const shipping = formData.city === 'Dhaka' ? 80 : 150;
-  const total = basePrice + shipping;
+  // --- LIVE SERVER URL ---
+  const API_URL = 'https://chokka-server.onrender.com';
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  // DEFAULTS (Reads from the 'product' prop, which comes from your Admin Panel)
+  const safeProduct = product || { id: 1, title: 'The Syndicate', price: 360, delivery_dhaka: 60, delivery_outside: 120 };
+  const GAME_PRICE = safeProduct.price;
+
+  // DYNAMIC SHIPPING LOGIC
+  // If product has custom shipping from DB, use it. Otherwise default to 60/120.
+  const deliveryDhaka = safeProduct.delivery_dhaka || 60;
+  const deliveryOutside = safeProduct.delivery_outside || 120;
+  
+  // Calculate based on selection
+  const SHIPPING = formData.city === 'Dhaka' ? deliveryDhaka : deliveryOutside;
+  
+  // Final Total logic
+  const TOTAL = Math.max(0, (GAME_PRICE + SHIPPING) - discount);
+
+  // --- COUPON CHECKER ---
+  const checkCoupon = async () => {
+    if (!formData.couponCode) return;
+    setCouponMsg('Checking...');
+    
+    try {
+        const res = await fetch(`${API_URL}/api/verify-coupon`, { // <--- Fixed URL
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: formData.couponCode })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            setDiscount(data.discount);
+            setCouponMsg(`✅ -${data.discount}৳ Applied!`);
+        } else {
+            setDiscount(0);
+            setCouponMsg('❌ Invalid Code');
+        }
+    } catch (err) {
+        setCouponMsg('❌ Error checking code');
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    // VALIDATION
-    if (!formData.name || !formData.phone || !formData.address) {
-      setError('Please fill in all required fields.');
-      setLoading(false);
-      return;
-    }
+    setStatus('loading');
 
     try {
-      // --- THE FIX: Point to the Live Server ---
-      const API_URL = 'https://chokka-server.onrender.com'; 
-
-      const response = await fetch(`${API_URL}/api/create-order`, {
+      const response = await fetch(`${API_URL}/api/create-order`, { // <--- Fixed URL
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_name: formData.name,
           customer_phone: formData.phone,
+          customer_email: formData.email,
           customer_address: formData.address,
           city: formData.city,
-          product_id: product.id,
+          product_id: safeProduct.id,
           quantity: 1,
-          total_price: total
+          total_price: TOTAL
         })
       });
 
       const data = await response.json();
-
+      
       if (data.success) {
-        setStep(3); // Show Success Screen
+        setStatus('success');
+        setTimeout(() => {
+            onClose();
+            setStatus('idle');
+            setFormData({ name: '', phone: '', email: '', address: '', city: 'Dhaka', couponCode: '' });
+            setDiscount(0);
+            setCouponMsg('');
+        }, 3000);
       } else {
-        setError('Order failed. Please try again.');
+        alert("Error: " + data.error);
+        setStatus('idle');
       }
-    } catch (err) {
-      setError('Server connection failed. Please check your internet.');
-      console.error(err);
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      alert("Server connection failed!");
+      setStatus('idle');
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-[#f8f5e6] w-full max-w-md rounded-xl border-4 border-[#1a3325] shadow-2xl overflow-hidden relative"
-        >
-          {/* Close Button */}
-          <button onClick={onClose} className="absolute top-4 right-4 text-[#1a3325]/50 hover:text-red-600 transition-colors">
-            <X size={24} />
-          </button>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-4">
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
 
-          {/* --- STEP 1: ORDER FORM --- */}
-          {step === 1 && (
-            <div className="p-8">
-              <h2 className="text-2xl font-black uppercase text-[#1a3325] mb-6 flex items-center gap-2">
-                Secure Checkout
-              </h2>
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+            className="relative bg-[#f4e4bc] w-full max-w-lg border-4 border-[#1a3325] shadow-2xl p-4 md:p-8 max-h-full overflow-y-auto"
+          >
+            <button onClick={onClose} className="absolute top-2 right-2 text-[#1a3325] hover:rotate-90 transition-transform"><X size={24} /></button>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+            {status === 'success' ? (
+              <div className="text-center py-10">
+                <div className="w-20 h-20 bg-[#2e8b57] rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-[#1a3325]">
+                  <Check size={40} color="white" strokeWidth={4} />
+                </div>
+                <h3 className="font-bold text-3xl mb-2 text-[#1a3325]">ORDER PLACED!</h3>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3 text-[#1a3325]">
+                <h2 className="font-bold text-2xl md:text-3xl mb-2">SECURE YOUR COPY</h2>
                 
-                {/* Name */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest mb-1 text-[#1a3325]/70">Full Name</label>
-                  <input 
-                    type="text" 
-                    name="name" 
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold focus:outline-none focus:ring-2 focus:ring-[#2e8b57]"
-                    placeholder="Enter your name"
-                  />
+                <input required type="text" className="w-full bg-white border-2 border-[#1a3325] p-2 font-bold" placeholder="Full Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}/>
+                <input required type="tel" className="w-full bg-white border-2 border-[#1a3325] p-2 font-bold" placeholder="017..." value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}/>
+                <input type="email" className="w-full bg-white border-2 border-[#1a3325] p-2 font-bold" placeholder="Email (Optional)" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}/>
+                
+                <div className="flex gap-2">
+                    <select className="w-full bg-white border-2 border-[#1a3325] p-2 font-bold" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})}>
+                        <option value="Dhaka">Dhaka ({deliveryDhaka}৳)</option>
+                        <option value="Outside Dhaka">Outside ({deliveryOutside}৳)</option>
+                    </select>
                 </div>
 
-                {/* Phone */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest mb-1 text-[#1a3325]/70">Phone Number</label>
-                  <input 
-                    type="tel" 
-                    name="phone" 
-                    value={formData.phone}
-                    onChange={handleChange}
-                    className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold focus:outline-none focus:ring-2 focus:ring-[#2e8b57]"
-                    placeholder="017..."
-                  />
-                </div>
+                <textarea required className="w-full bg-white border-2 border-[#1a3325] p-2 font-bold h-20 resize-none" placeholder="Address..." value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}/>
 
-                {/* City Selection (Affects Shipping) */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest mb-1 text-[#1a3325]/70">Shipping Area</label>
-                  <select 
-                    name="city" 
-                    value={formData.city} 
-                    onChange={handleChange}
-                    className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold focus:outline-none focus:ring-2 focus:ring-[#2e8b57]"
-                  >
-                    <option value="Dhaka">Inside Dhaka (80৳)</option>
-                    <option value="Outside">Outside Dhaka (150৳)</option>
-                  </select>
-                </div>
-
-                {/* Address */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest mb-1 text-[#1a3325]/70">Detailed Address</label>
-                  <textarea 
-                    name="address" 
-                    value={formData.address}
-                    onChange={handleChange}
-                    rows="2"
-                    className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold focus:outline-none focus:ring-2 focus:ring-[#2e8b57]"
-                    placeholder="House, Road, Area..."
-                  ></textarea>
-                </div>
-
-                {/* Order Summary */}
-                <div className="bg-[#1a3325]/5 p-4 rounded border-2 border-[#1a3325]/10 mt-6">
-                    <div className="flex justify-between text-sm font-bold opacity-70 mb-2">
-                        <span>Subtotal</span>
-                        <span>{basePrice}৳</span>
+                {/* --- COUPON SECTION --- */}
+                <div className="flex gap-2 items-center">
+                    <div className="relative w-full">
+                        <Tag size={16} className="absolute left-3 top-3 opacity-50"/>
+                        <input 
+                            type="text" 
+                            className="w-full bg-white border-2 border-[#1a3325] p-2 pl-9 font-bold uppercase placeholder:normal-case"
+                            placeholder="Promo Code"
+                            value={formData.couponCode}
+                            onChange={e => setFormData({...formData, couponCode: e.target.value})}
+                        />
                     </div>
-                    <div className="flex justify-between text-sm font-bold opacity-70 mb-2">
-                        <span>Shipping</span>
-                        <span>{shipping}৳</span>
+                    <button 
+                        type="button"
+                        onClick={checkCoupon}
+                        className="bg-[#1a3325] text-white font-bold px-4 py-2 border-2 border-transparent hover:bg-[#2e8b57]"
+                    >
+                        APPLY
+                    </button>
+                </div>
+                {couponMsg && <p className="text-sm font-bold text-right -mt-2">{couponMsg}</p>}
+
+                {/* TOTAL */}
+                <div className="border-t-2 border-[#1a3325] pt-3 mt-1">
+                    <div className="flex justify-between text-sm opacity-80">
+                        <span>Price:</span> <span>{GAME_PRICE}৳</span>
                     </div>
-                    <div className="flex justify-between text-xl font-black text-[#1a3325] border-t-2 border-[#1a3325]/20 pt-2 mt-2">
-                        <span>TOTAL</span>
-                        <span>{total}৳</span>
+                    <div className="flex justify-between text-sm opacity-80">
+                        <span>Shipping:</span> <span>{SHIPPING}৳</span>
+                    </div>
+                    {discount > 0 && (
+                        <div className="flex justify-between text-sm font-bold text-[#2e8b57]">
+                            <span>Discount:</span> <span>-{discount}৳</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between font-bold text-3xl mt-2">
+                        <span>TOTAL</span> <span>{TOTAL}৳</span>
                     </div>
                 </div>
 
-                {/* Error Message */}
-                {error && (
-                  <div className="bg-red-100 text-red-700 p-3 text-sm font-bold flex items-center gap-2 rounded border border-red-200">
-                    <AlertTriangle size={16}/> {error}
-                  </div>
-                )}
-
-                {/* Submit Button */}
-                <button 
-                  type="submit" 
-                  disabled={loading}
-                  className="w-full bg-[#1a3325] text-white py-4 font-black uppercase tracking-widest hover:bg-[#2e8b57] transition-colors flex justify-center items-center gap-2"
-                >
-                  {loading ? 'Processing...' : 'Confirm Order - Cash on Delivery'}
+                <button disabled={status === 'loading'} className="bg-[#1a3325] text-white font-bold text-xl py-3 mt-2 hover:bg-[#2e8b57] transition-all disabled:opacity-50">
+                  {status === 'loading' ? 'PROCESSING...' : 'CONFIRM ORDER'}
                 </button>
-
               </form>
-            </div>
-          )}
-
-          {/* --- STEP 3: SUCCESS --- */}
-          {step === 3 && (
-            <div className="p-12 text-center flex flex-col items-center justify-center min-h-[400px]">
-              <motion.div 
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="w-24 h-24 bg-[#2e8b57] rounded-full flex items-center justify-center mb-6 shadow-xl"
-              >
-                <CheckCircle size={48} className="text-white" />
-              </motion.div>
-              <h2 className="text-3xl font-black uppercase text-[#1a3325] mb-2">Order Received!</h2>
-              <p className="font-bold opacity-70 mb-8 max-w-xs mx-auto">
-                Thanks, {formData.name}. We will call you shortly to confirm delivery.
-              </p>
-              <button 
-                onClick={onClose}
-                className="bg-[#1a3325] text-white px-8 py-3 font-bold uppercase tracking-widest hover:bg-[#2e8b57] transition-all"
-              >
-                Close & Continue
-              </button>
-            </div>
-          )}
-
-        </motion.div>
-      </div>
+            )}
+          </motion.div>
+        </div>
+      )}
     </AnimatePresence>
   );
 }
