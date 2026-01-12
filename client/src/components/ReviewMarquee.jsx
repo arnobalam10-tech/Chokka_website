@@ -1,35 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { Star, User } from 'lucide-react';
 
-export default function ReviewMarquee() {
-  const [reviews, setReviews] = useState([]);
-
-  useEffect(() => {
-    fetch('http://localhost:5000/api/reviews')
-      .then(res => res.json())
-      .then(data => {
-        // If DB has reviews, use them. If empty, use placeholders.
-        if (data && data.length > 0) {
-            setReviews(data);
-        } else {
-            setReviews([
-                { customer_name: "Tanvir", rating: 5, comment: "Best card game night ever!" },
-                { customer_name: "Sarah", rating: 5, comment: "Totally ruins friendships haha." },
-                { customer_name: "Rafiq", rating: 4, comment: "Delivery was super fast." },
-                { customer_name: "Ayman", rating: 5, comment: "Quality is premium." }
-            ]);
-        }
-      })
-      .catch(() => {
-          // Fallback if server is offline
-          setReviews([
-            { customer_name: "Tanvir", rating: 5, comment: "Best card game night ever!" },
-            { customer_name: "Sarah", rating: 5, comment: "Totally ruins friendships haha." }
-        ]);
-      });
-  }, []);
-
+export default function ReviewMarquee({ reviews }) {
+  // STRICT CHECK: If no reviews, DO NOT RENDER ANYTHING. 
+  // This kills the placeholder (Sarah/Tanvir) behavior.
   if (!reviews || reviews.length === 0) return null;
 
   // Duplicate list to create infinite loop effect

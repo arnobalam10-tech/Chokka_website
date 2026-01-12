@@ -6,11 +6,21 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
-app.use(cors());
+// --- FIXED CORS: Allows Vercel & Custom Domain ---
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://chokka-website.vercel.app', 
+    'https://www.chokka-website.vercel.app',
+    'https://chokka.com', 
+    'https://www.chokka.com'
+  ],
+  credentials: true
+}));
+
 app.use(express.json());
 
-// Initialize Supabase (Tries both key names to be safe)
+// Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -52,7 +62,7 @@ app.get('/api/orders', async (req, res) => {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .order('created_at', { ascending: false }); // Newest first
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     res.json(data);
@@ -86,7 +96,6 @@ app.put('/api/orders/:id', async (req, res) => {
 // Get Product Info (To show in Admin)
 app.get('/api/product', async (req, res) => {
   try {
-    // We assume you are editing Product #1 "The Syndicate"
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -108,7 +117,7 @@ app.put('/api/product', async (req, res) => {
     const { data, error } = await supabase
       .from('products')
       .update({ price, stock, delivery_dhaka, delivery_outside })
-      .eq('id', 1) // Always updates Product #1
+      .eq('id', 1)
       .select();
 
     if (error) throw error;
@@ -151,6 +160,7 @@ app.post('/api/coupons', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // --- 4. VERIFY COUPON ---
 app.post('/api/verify-coupon', async (req, res) => {
   const { code } = req.body;
@@ -158,14 +168,13 @@ app.post('/api/verify-coupon', async (req, res) => {
     const { data, error } = await supabase
       .from('coupons')
       .select('*')
-      .eq('code', code.toUpperCase()) // Case insensitive
+      .eq('code', code.toUpperCase())
       .single();
 
     if (error || !data) {
       return res.json({ success: false, message: 'Invalid Coupon' });
     }
     
-    // Check if active
     if (!data.is_active) {
        return res.json({ success: false, message: 'Coupon Expired' });
     }
@@ -175,6 +184,7 @@ app.post('/api/verify-coupon', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // --- 5. MANAGE REVIEWS ---
 // Get All Reviews (For Admin & Website)
 app.get('/api/reviews', async (req, res) => {
@@ -218,6 +228,7 @@ app.delete('/api/reviews/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // --- 6. MANAGE GALLERY (VISUALS) ---
 // Get All Images
 app.get('/api/gallery', async (req, res) => {
@@ -261,6 +272,7 @@ app.delete('/api/gallery/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // --- STEADFAST COURIER INTEGRATION ---
 
 // 1. Send Order to Steadfast
@@ -302,14 +314,14 @@ app.post('/api/steadfast/create', async (req, res) => {
 // 2. Update Order Status Manually (For Dispatched/Delivered)
 app.put('/api/orders/:id/status', async (req, res) => {
   const { id } = req.params;
-  const { status, tracking_code } = req.body; // We can save tracking code if needed
+  const { status, tracking_code } = req.body;
 
   try {
     const updateData = { status: status };
     if (tracking_code) updateData.tracking_code = tracking_code;
 
     const { error } = await supabase
-      .from('orders') // Assuming your table is named 'orders'
+      .from('orders')
       .update(updateData)
       .eq('id', id);
 
@@ -319,6 +331,7 @@ app.put('/api/orders/:id/status', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // --- 9. DELETE ORDER ---
 app.delete('/api/orders/:id', async (req, res) => {
   const { id } = req.params;
@@ -327,27 +340,25 @@ app.delete('/api/orders/:id', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
-// --- 10. STEADFAST BULK UPLOAD (CORRECTED) ---
+
+// --- 10. STEADFAST BULK UPLOAD ---
 app.post('/api/steadfast/bulk-create', async (req, res) => {
   const { orders } = req.body;
   
-  // ⚠️ PASTE YOUR REAL KEYS HERE IF THEY ARE MISSING ⚠️
   const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
   const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
   const BASE_URL = 'https://portal.packzy.com/api/v1';
 
-  // 1. Format the array exactly as Steadfast wants
   const bulkArray = orders.map(o => ({
     invoice: `INV-${o.id}`,
     recipient_name: o.customer_name,
     recipient_address: o.customer_address,
     recipient_phone: o.customer_phone,
-    cod_amount: o.total_price, // Ensure this is a number/string
+    cod_amount: o.total_price,
     note: 'Handle with care'
   }));
 
   try {
-    // 2. The critical fix: 'data' must be a JSON STRING, not an object
     const payload = JSON.stringify(bulkArray);
 
     const response = await fetch(`${BASE_URL}/create_order/bulk-order`, {
@@ -357,18 +368,13 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
         'Api-Key': API_KEY,
         'Secret-Key': SECRET_KEY
       },
-      body: JSON.stringify({ data: payload }) // Double wrapping
+      body: JSON.stringify({ data: payload })
     });
 
     const result = await response.json();
-    console.log("Steadfast Bulk Response:", JSON.stringify(result, null, 2)); // Detailed Log
+    console.log("Steadfast Bulk Response:", JSON.stringify(result, null, 2));
 
-    // 3. Handle their specific response format
-    // Steadfast bulk response is usually an array of objects, not just { status: 200 }
-    // We check if we got an array back, or a success status
     if (result.status === 200 || Array.isArray(result)) {
-        
-        // Mark all as posted in our DB
         const ids = orders.map(o => o.id);
         await supabase
           .from('orders')
@@ -377,7 +383,6 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
           
         res.json({ success: true, count: orders.length, details: result });
     } else {
-        // If Steadfast returns an error object
         res.json({ success: false, message: "Steadfast Rejected: " + JSON.stringify(result) });
     }
 
@@ -386,6 +391,7 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // Start Server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
