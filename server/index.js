@@ -391,18 +391,29 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// --- THE "FORCE FIELD" CORS FIX ---
-app.use((req, res, next) => {
-  // 1. Grab the origin, OR fall back to "*" (Everyone) if it's missing
-  const origin = req.headers.origin || "*";
+// --- PROPER CORS CONFIGURATION ---
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173', 
+  'https://your-render-domain.onrender.com',
+  'https://your-vercel-domain.vercel.app',
+  'https://yournewdomain.com',  // ADD YOUR NEW DOMAIN
+  'https://www.yournewdomain.com'  // ADD WITH WWW TOO
+];
 
-  // 2. Force these headers on EVERYTHING. No 'if' statements.
-  res.setHeader("Access-Control-Allow-Origin", origin);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Only allow origins from our whitelist
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
 
-  // 3. Kill the 'Pre-flight' check immediately with success
+  // Handle preflight
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
