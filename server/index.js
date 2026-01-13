@@ -391,35 +391,21 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// --- PROPER CORS CONFIGURATION ---
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173', 
-  'https://your-render-domain.onrender.com',
-  'https://your-vercel-domain.vercel.app',
-  'https://chokka.shop',  // ADD YOUR NEW DOMAIN
-  'https://www.chokka.shop'  // ADD WITH WWW TOO
-];
+// --- FINAL & STABLE CORS FIX ---
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    // This 'Reflects' the origin, telling the browser: "Yes, I allow you specifically."
+    callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // Only allow origins from our whitelist
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-  
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-
-  // Handle preflight
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
+// Explicitly handle the 'OPTIONS' pre-flight for all routes
+app.options('*', cors());
 // Start Server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
