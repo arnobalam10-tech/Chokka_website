@@ -48,7 +48,7 @@ export default function HomePage() {
         <div className="flex items-center gap-4 cursor-pointer">
            <motion.img 
              whileHover={{ rotate: -5, scale: 1.05 }} 
-             src="/logo.png.jpeg" 
+             src="/logo.png" 
              alt="CHOKKA" 
              className="w-16 h-16 object-contain" 
            />
