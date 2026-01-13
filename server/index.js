@@ -391,21 +391,29 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// --- FINAL & STABLE CORS FIX ---
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    // This 'Reflects' the origin, telling the browser: "Yes, I allow you specifically."
-    callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
-}));
+// --- THE EXPLICIT TRUST FIX ---
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://www.chokka.shop', 
+    'https://chokka.shop', 
+    'https://chokka-website.vercel.app',
+    'http://localhost:5173'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
 
-// Explicitly handle the 'OPTIONS' pre-flight for all routes
-app.options('*', cors());
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 // Start Server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
