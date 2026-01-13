@@ -391,12 +391,28 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// MANUAL CORS FIX: Force headers on every single response
+// --- THE "REFLECTING MIRROR" CORS FIX ---
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*"); // Allow ANY domain
+  // 1. Get the domain asking for data
+  const origin = req.headers.origin;
+  
+  // 2. If a domain exists, allow IT specifically (instead of *)
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
+  // 3. Allow these methods and headers
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  
+  // 4. NOW we can safely allow credentials because we aren't using "*"
   res.header("Access-Control-Allow-Credentials", "true");
+
+  // 5. Answer the "Pre-flight" check immediately
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+
   next();
 });
 // Start Server
