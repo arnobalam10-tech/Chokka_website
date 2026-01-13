@@ -78,6 +78,7 @@ app.post('/api/create-order', async (req, res) => {
       .select();
 
     if (error) throw error;
+    await sendTelegramNotification(req.body);
     res.json({ success: true, orderId: data[0].id });
 
   } catch (error) {
