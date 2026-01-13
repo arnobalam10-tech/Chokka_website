@@ -391,29 +391,14 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// --- THE EXPLICIT TRUST FIX ---
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    'https://www.chokka.shop', 
-    'https://chokka.shop', 
-    'https://chokka-website.vercel.app',
-    'http://localhost:5173'
-  ];
-  
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
+const cors = require('cors');
 
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+// Place this BEFORE your routes
+app.use(cors({
+  origin: ['https://www.chokka.shop', 'https://chokka-website.vercel.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
 // Start Server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
