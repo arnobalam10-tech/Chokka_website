@@ -391,7 +391,17 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://chokka-website.vercel.app',
+    'https://www.chokka-website.vercel.app',
+    // 👇 ADD YOUR NEW DOMAIN HERE 👇
+    'https://chokka.shop',       
+    'https://www.chokka.shop'
+  ],
+  credentials: true
+}));
 // Start Server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
