@@ -391,24 +391,18 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// --- THE "REFLECTING MIRROR" CORS FIX ---
+// --- THE "FORCE FIELD" CORS FIX ---
 app.use((req, res, next) => {
-  // 1. Get the domain asking for data
-  const origin = req.headers.origin;
-  
-  // 2. If a domain exists, allow IT specifically (instead of *)
-  if (origin) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
+  // 1. Grab the origin, OR fall back to "*" (Everyone) if it's missing
+  const origin = req.headers.origin || "*";
 
-  // 3. Allow these methods and headers
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  
-  // 4. NOW we can safely allow credentials because we aren't using "*"
-  res.header("Access-Control-Allow-Credentials", "true");
+  // 2. Force these headers on EVERYTHING. No 'if' statements.
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
 
-  // 5. Answer the "Pre-flight" check immediately
+  // 3. Kill the 'Pre-flight' check immediately with success
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
