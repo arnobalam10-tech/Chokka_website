@@ -391,8 +391,14 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// Allow EVERYONE (Fixes all domain issues instantly)
-app.use(cors());
+// MANUAL CORS FIX: Force headers on every single response
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*"); // Allow ANY domain
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+  next();
+});
 // Start Server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
