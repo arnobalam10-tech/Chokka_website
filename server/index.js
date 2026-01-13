@@ -25,7 +25,9 @@ app.use(express.json());
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
-// --- NEW: TELEGRAM NOTIFICATION FUNCTION ---
+// Add this at the very top of your file with other requires
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
 const sendTelegramNotification = async (orderData) => {
   const TELEGRAM_TOKEN = '8279878052:AAH6w2UeFBDUkMHGxXutA4UoYwv1yJFRIFw';
   const CHAT_ID = '5865440292';
@@ -33,14 +35,14 @@ const sendTelegramNotification = async (orderData) => {
   const message = `💰 *NEW ORDER RECEIVED!* 💰\n\n` +
                   `👤 *Name:* ${orderData.customer_name}\n` +
                   `📞 *Phone:* ${orderData.customer_phone}\n` +
-                  `📍 *Address:* ${orderData.customer_address}\n` +
                   `🏙️ *City:* ${orderData.city}\n` +
-                  `📦 *Quantity:* ${orderData.quantity}\n` +
-                  `💵 *Total Price:* ${orderData.total_price} BDT\n\n` +
-                  `🚀 _Go to admin panel to process this order!_`;
+                  `💵 *Total:* ${orderData.total_price} BDT\n\n` +
+                  `👉 [Open Admin Panel](https://chokka-website.vercel.app/admin)`;
+
+  console.log("Attempting to send Telegram notification...");
 
   try {
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -49,8 +51,15 @@ const sendTelegramNotification = async (orderData) => {
         parse_mode: 'Markdown'
       })
     });
+    
+    const result = await response.json();
+    if (result.ok) {
+      console.log("Telegram notification sent successfully!");
+    } else {
+      console.error("Telegram API Error:", result);
+    }
   } catch (error) {
-    console.error("Telegram Notification Error:", error);
+    console.error("Telegram Network Error:", error);
   }
 };
 // --- 1. ORDERS ---
