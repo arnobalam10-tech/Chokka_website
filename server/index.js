@@ -397,8 +397,8 @@ const allowedOrigins = [
   'http://localhost:5173', 
   'https://your-render-domain.onrender.com',
   'https://your-vercel-domain.vercel.app',
-  'https://yournewdomain.com',  // ADD YOUR NEW DOMAIN
-  'https://www.yournewdomain.com'  // ADD WITH WWW TOO
+  'https://chokka.shop',  // ADD YOUR NEW DOMAIN
+  'https://www.chokka.shop'  // ADD WITH WWW TOO
 ];
 
 app.use((req, res, next) => {
