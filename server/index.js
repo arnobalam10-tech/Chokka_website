@@ -25,9 +25,7 @@ app.use(express.json());
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
-// Add this at the very top of your file with other requires
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-
+// Paste this near the top, after your constants
 const sendTelegramNotification = async (orderData) => {
   const TELEGRAM_TOKEN = '8279878052:AAH6w2UeFBDUkMHGxXutA4UoYwv1yJFRIFw';
   const CHAT_ID = '5865440292';
@@ -37,11 +35,10 @@ const sendTelegramNotification = async (orderData) => {
                   `📞 *Phone:* ${orderData.customer_phone}\n` +
                   `🏙️ *City:* ${orderData.city}\n` +
                   `💵 *Total:* ${orderData.total_price} BDT\n\n` +
-                  `👉 [Open Admin Panel](https://chokka-website.vercel.app/admin)`;
-
-  console.log("Attempting to send Telegram notification...");
+                  `👉 [Open Admin Panel](https://chokka.shop/admin)`;
 
   try {
+    // Using global fetch (available in Node 18+)
     const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -53,13 +50,9 @@ const sendTelegramNotification = async (orderData) => {
     });
     
     const result = await response.json();
-    if (result.ok) {
-      console.log("Telegram notification sent successfully!");
-    } else {
-      console.error("Telegram API Error:", result);
-    }
+    console.log("Telegram API Response:", result);
   } catch (error) {
-    console.error("Telegram Network Error:", error);
+    console.error("Telegram Error:", error);
   }
 };
 // --- 1. ORDERS ---
