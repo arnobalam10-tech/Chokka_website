@@ -6,15 +6,16 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// --- FIXED CORS: Allows Vercel & Custom Domain ---
+// --- FIXED CORS: Allows Local, Vercel, and Custom Domain ---
 app.use(cors({
   origin: [
     'http://localhost:5173',
     'https://chokka-website.vercel.app', 
     'https://www.chokka-website.vercel.app',
-    'https://chokka.com', 
-    'https://www.chokka.com'
+    'https://chokka.shop', 
+    'https://www.chokka.shop'
   ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
 
@@ -186,7 +187,6 @@ app.post('/api/verify-coupon', async (req, res) => {
 });
 
 // --- 5. MANAGE REVIEWS ---
-// Get All Reviews (For Admin & Website)
 app.get('/api/reviews', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -201,7 +201,6 @@ app.get('/api/reviews', async (req, res) => {
   }
 });
 
-// Add a Review (From Admin)
 app.post('/api/reviews', async (req, res) => {
   const { customer_name, rating, comment } = req.body;
   try {
@@ -217,7 +216,6 @@ app.post('/api/reviews', async (req, res) => {
   }
 });
 
-// Delete a Review
 app.delete('/api/reviews/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -229,8 +227,7 @@ app.delete('/api/reviews/:id', async (req, res) => {
   }
 });
 
-// --- 6. MANAGE GALLERY (VISUALS) ---
-// Get All Images
+// --- 6. MANAGE GALLERY ---
 app.get('/api/gallery', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -245,7 +242,6 @@ app.get('/api/gallery', async (req, res) => {
   }
 });
 
-// Add New Image
 app.post('/api/gallery', async (req, res) => {
   const { image_url, caption } = req.body;
   try {
@@ -261,7 +257,6 @@ app.post('/api/gallery', async (req, res) => {
   }
 });
 
-// Delete Image
 app.delete('/api/gallery/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -274,12 +269,8 @@ app.delete('/api/gallery/:id', async (req, res) => {
 });
 
 // --- STEADFAST COURIER INTEGRATION ---
-
-// 1. Send Order to Steadfast
 app.post('/api/steadfast/create', async (req, res) => {
   const { invoice, name, address, phone, amount, note } = req.body;
-
-  // ⚠️ REPLACE THESE WITH YOUR REAL STEADFAST KEYS ⚠️
   const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
   const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
   const BASE_URL = 'https://portal.packzy.com/api/v1';
@@ -304,14 +295,12 @@ app.post('/api/steadfast/create', async (req, res) => {
 
     const data = await response.json();
     res.json(data);
-
   } catch (error) {
     console.error("Steadfast Error:", error);
     res.status(500).json({ status: 500, message: "Server Error connecting to Steadfast" });
   }
 });
 
-// 2. Update Order Status Manually (For Dispatched/Delivered)
 app.put('/api/orders/:id/status', async (req, res) => {
   const { id } = req.params;
   const { status, tracking_code } = req.body;
@@ -332,19 +321,15 @@ app.put('/api/orders/:id/status', async (req, res) => {
   }
 });
 
-// --- 9. DELETE ORDER ---
 app.delete('/api/orders/:id', async (req, res) => {
   const { id } = req.params;
   const { error } = await supabase.from('orders').delete().eq('id', id);
-  
   if (error) return res.status(500).json({ error: error.message });
   res.json({ success: true });
 });
 
-// --- 10. STEADFAST BULK UPLOAD ---
 app.post('/api/steadfast/bulk-create', async (req, res) => {
   const { orders } = req.body;
-  
   const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
   const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
   const BASE_URL = 'https://portal.packzy.com/api/v1';
@@ -360,7 +345,6 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
 
   try {
     const payload = JSON.stringify(bulkArray);
-
     const response = await fetch(`${BASE_URL}/create_order/bulk-order`, {
       method: 'POST',
       headers: {
@@ -372,33 +356,21 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     });
 
     const result = await response.json();
-    console.log("Steadfast Bulk Response:", JSON.stringify(result, null, 2));
-
     if (result.status === 200 || Array.isArray(result)) {
         const ids = orders.map(o => o.id);
         await supabase
           .from('orders')
           .update({ status: 'Steadfast_Posted' })
           .in('id', ids);
-          
         res.json({ success: true, count: orders.length, details: result });
     } else {
         res.json({ success: false, message: "Steadfast Rejected: " + JSON.stringify(result) });
     }
-
   } catch (error) {
-    console.error("Bulk Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
-const cors = require('cors');
 
-// Place this BEFORE your routes
-app.use(cors({
-  origin: ['https://www.chokka.shop', 'https://chokka-website.vercel.app'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  credentials: true
-}));
 // Start Server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
