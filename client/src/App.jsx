@@ -1,8 +1,8 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import HomePage from './pages/HomePage';
-import Admin from './pages/Admin';
-import Login from './pages/Login';
+import HomePage from './pages/HomePage.jsx';
+import Admin from './pages/Admin.jsx';
+import Login from './pages/Loginl.jsx';
 
 // Security Guard: Checks if you have the secret key
 const ProtectedRoute = ({ children }) => {
