@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle } from 'lucide-react';
+import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -15,7 +15,6 @@ export default function Admin() {
   const [orders, setOrders] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [reviews, setReviews] = useState([]);
-  // Added 'cost' to product state
   const [product, setProduct] = useState({ price: 0, cost: 0, stock: 0, delivery_dhaka: 60, delivery_outside: 120 });
   const [gallery, setGallery] = useState([]);
   
@@ -35,38 +34,25 @@ export default function Admin() {
   const fetchReviews = () => fetch('https://chokka-server.onrender.com/api/reviews').then(r => r.json()).then(setReviews);
   const fetchGallery = () => fetch('https://chokka-server.onrender.com/api/gallery').then(r => r.json()).then(setGallery);
 
-  // --- NEW: SALES ANALYTICS LOGIC ---
   const getStats = () => {
-    // Filter out cancelled orders
     const validOrders = orders.filter(o => o.status !== 'Cancelled');
-    
-    // 1. Total Sales (Based on CURRENT Product Price * Count, as requested)
     const totalSales = validOrders.length * (product.price || 0);
-    
-    // 2. Total Cost (Product Cost * Count)
     const totalCost = validOrders.length * (product.cost || 0);
-    
-    // 3. Gross Profit
     const grossProfit = totalSales - totalCost;
-
-    // 4. Graph Data (Last 7 Days)
     const last7Days = [...Array(7)].map((_, i) => {
         const d = new Date();
         d.setDate(d.getDate() - i);
         return d.toISOString().split('T')[0];
     }).reverse();
-
     const chartData = last7Days.map(date => {
         const count = validOrders.filter(o => o.created_at.startsWith(date)).length;
-        return { date: date.slice(5), count }; // slice to show MM-DD
+        return { date: date.slice(5), count };
     });
-
     return { totalSales, totalCost, grossProfit, count: validOrders.length, chartData };
   };
 
   const stats = getStats();
 
-  // --- STEADFAST LOGIC ---
   const sendToSteadfast = async (order) => {
     if(!confirm(`Send Order #${order.id} to Steadfast Courier?`)) return;
     setProcessingOrder(order.id);
@@ -93,14 +79,10 @@ export default function Admin() {
     } catch (error) { alert("Server Error"); } finally { setProcessingOrder(null); }
   };
 
-  // --- NEW: BULK SEND LOGIC ---
   const sendAllPending = async () => {
-    // Filter orders that are Pending or Pickup Pending
     const pendingOrders = orders.filter(o => !o.status || o.status === 'Pending' || o.status === 'Pickup Pending');
-    
     if (pendingOrders.length === 0) return alert("No pending orders to send!");
     if (!confirm(`Are you sure you want to send ${pendingOrders.length} orders to Steadfast?`)) return;
-
     setIsBulkSending(true);
     try {
         const response = await fetch('https://chokka-server.onrender.com/api/steadfast/bulk-create', {
@@ -142,9 +124,22 @@ export default function Admin() {
     return orders;
   };
 
-  // --- OTHER ACTIONS ---
   const updateProduct = async () => { const res = await fetch('https://chokka-server.onrender.com/api/product', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product) }); if(res.ok) alert("✅ Updated!"); };
+  
+  // --- UPDATED COUPON ACTIONS ---
   const createCoupon = async (e) => { e.preventDefault(); await fetch('https://chokka-server.onrender.com/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
+  
+  const updateCoupon = async (id, updatedData) => {
+    const { error } = await supabase.from('coupons').update(updatedData).eq('id', id);
+    if (!error) { fetchCoupons(); } else { alert("Error updating coupon"); }
+  };
+
+  const deleteCoupon = async (id) => {
+    if(!confirm("Delete this coupon?")) return;
+    const { error } = await supabase.from('coupons').delete().eq('id', id);
+    if (!error) { fetchCoupons(); } else { alert("Error deleting coupon"); }
+  };
+
   const createReview = async (e) => { e.preventDefault(); await fetch('https://chokka-server.onrender.com/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_name: e.target.name.value, rating: e.target.rating.value, comment: e.target.comment.value }) }); e.target.reset(); fetchReviews(); };
   const deleteReview = async (id) => { if(!confirm("Delete?")) return; await fetch(`https://chokka-server.onrender.com/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
   const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`https://chokka-server.onrender.com/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
@@ -174,15 +169,10 @@ export default function Admin() {
         </nav>
       </div>
 
-      {/* CONTENT */}
       <div className="ml-64 p-10 w-full">
-        
-        {/* --- 1. NEW ANALYTICS TAB --- */}
         {activeTab === 'analytics' && (
             <div>
                 <h2 className="text-3xl font-bold mb-8">SALES SUMMARY</h2>
-                
-                {/* Scorecards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                     <div className="bg-white p-6 shadow-lg border-2 border-black">
                         <div className="text-gray-500 font-bold mb-2 flex items-center gap-2"><Package/> Total Orders</div>
@@ -198,17 +188,12 @@ export default function Admin() {
                         <div className="text-xs text-gray-500 mt-2 font-bold">Calculation: (Price {product.price} - Cost {product.cost}) * Orders</div>
                     </div>
                 </div>
-
-                {/* Simple Bar Chart */}
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><Calendar/> Order Volume (Last 7 Days)</h3>
                 <div className="bg-white p-8 shadow-lg border-2 border-black h-64 flex items-end justify-around gap-2">
                     {stats.chartData.map((d, i) => (
                         <div key={i} className="flex flex-col items-center w-full group">
                             <div className="font-bold mb-2 opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</div>
-                            <div 
-                                className="w-full max-w-[40px] bg-chokka-green hover:bg-chokka-dark transition-all rounded-t"
-                                style={{ height: `${d.count > 0 ? (d.count * 20) + 10 : 2}px` }} 
-                            ></div>
+                            <div className="w-full max-w-[40px] bg-chokka-green hover:bg-chokka-dark transition-all rounded-t" style={{ height: `${d.count > 0 ? (d.count * 20) + 10 : 2}px` }}></div>
                             <div className="text-xs font-bold mt-2 text-gray-500">{d.date}</div>
                         </div>
                     ))}
@@ -216,28 +201,19 @@ export default function Admin() {
             </div>
         )}
 
-        {/* --- 2. ORDERS TAB (UPDATED) --- */}
         {activeTab === 'orders' && (
             <div>
                 <div className="flex justify-between items-end mb-6">
                     <h2 className="text-3xl font-bold">ORDER MANAGEMENT</h2>
-                    {/* NEW BULK BUTTON */}
-                    <button 
-                        onClick={sendAllPending}
-                        disabled={isBulkSending}
-                        className="bg-green-600 text-white px-6 py-3 font-bold shadow-lg hover:bg-green-700 flex items-center gap-2 border-2 border-black transition-transform active:scale-95 disabled:opacity-50"
-                    >
+                    <button onClick={sendAllPending} disabled={isBulkSending} className="bg-green-600 text-white px-6 py-3 font-bold shadow-lg hover:bg-green-700 flex items-center gap-2 border-2 border-black transition-transform active:scale-95 disabled:opacity-50">
                         {isBulkSending ? 'SENDING...' : <><Send size={20}/> SEND ALL PENDING TO STEADFAST</>}
                     </button>
                 </div>
-                
-                {/* SUB TABS */}
                 <div className="flex gap-2 mb-6 border-b-2 border-gray-300 pb-2 overflow-x-auto">
                     {['All', 'Pickup Pending', 'Pickup Sent', 'Dispatched', 'Delivered'].map(tab => (
                         <button key={tab} onClick={() => setOrderSubTab(tab)} className={`px-4 py-2 font-bold whitespace-nowrap rounded-t-lg transition-colors ${orderSubTab === tab ? 'bg-chokka-dark text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{tab}</button>
                     ))}
                 </div>
-
                 <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className="bg-gray-200 border-b-2 border-black">
@@ -295,16 +271,12 @@ export default function Admin() {
             </div>
         )}
 
-        {/* --- 3. PRODUCTS TAB (UPDATED WITH COST) --- */}
         {activeTab === 'products' && (
             <div className="max-w-xl">
                 <h2 className="text-3xl font-bold mb-6">GAME SETTINGS</h2>
                 <div className="bg-white p-8 shadow-lg border-2 border-black flex flex-col gap-6">
                     <div><label className="block font-bold mb-2">Selling Price (Taka)</label><input type="number" className="w-full p-3 border-2 border-gray-300 font-bold text-lg" value={product.price} onChange={e => setProduct({...product, price: Number(e.target.value)})}/></div>
-                    
-                    {/* NEW COST INPUT */}
                     <div><label className="block font-bold mb-2 text-red-600 flex items-center gap-2"><AlertCircle size={16}/> Manufacturing Cost (For Profit Calc)</label><input type="number" className="w-full p-3 border-2 border-red-200 font-bold text-lg" value={product.cost || 0} onChange={e => setProduct({...product, cost: Number(e.target.value)})}/></div>
-
                     <div className="flex gap-4">
                         <div className="w-1/2"><label className="block font-bold mb-2 text-sm">Dhaka Ship</label><input type="number" className="w-full p-3 border-2 border-gray-300 font-bold" value={product.delivery_dhaka} onChange={e => setProduct({...product, delivery_dhaka: Number(e.target.value)})}/></div>
                         <div className="w-1/2"><label className="block font-bold mb-2 text-sm">Outside Ship</label><input type="number" className="w-full p-3 border-2 border-gray-300 font-bold" value={product.delivery_outside} onChange={e => setProduct({...product, delivery_outside: Number(e.target.value)})}/></div>
@@ -314,7 +286,6 @@ export default function Admin() {
             </div>
         )}
 
-        {/* --- COUPONS TAB (Restored) --- */}
         {activeTab === 'coupons' && (
             <div className="max-w-4xl">
                 <h2 className="text-3xl font-bold mb-6">COUPON MANAGER</h2>
@@ -323,11 +294,45 @@ export default function Admin() {
                     <div><label className="font-bold block text-sm mb-1">Discount (Tk)</label><input name="discount" required type="number" placeholder="50" className="border-2 border-gray-300 p-2 font-bold w-32"/></div>
                     <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2"><Plus size={18}/> CREATE</button>
                 </form>
-                <div className="bg-white shadow-lg border-2 border-black"><table className="w-full text-left"><thead className="bg-gray-200 border-b-2 border-black"><tr><th className="p-3">Code</th><th className="p-3">Discount</th><th className="p-3">Status</th></tr></thead><tbody>{coupons.map(c => <tr key={c.id} className="border-b"><td className="p-3 font-bold text-green-700">{c.code}</td><td className="p-3 font-bold">{c.discount}৳ OFF</td><td className="p-3 text-sm">Active</td></tr>)}</tbody></table></div>
+                <div className="bg-white shadow-lg border-2 border-black">
+                  <table className="w-full text-left">
+                    <thead className="bg-gray-200 border-b-2 border-black">
+                      <tr><th className="p-3">Code</th><th className="p-3">Discount</th><th className="p-3">Actions</th></tr>
+                    </thead>
+                    <tbody>
+                      {coupons.map(c => (
+                        <tr key={c.id} className="border-b">
+                          <td className="p-3">
+                            <input 
+                              className="font-bold text-green-700 bg-transparent border-b border-transparent hover:border-gray-400 focus:border-green-700 focus:outline-none uppercase w-full"
+                              defaultValue={c.code}
+                              onBlur={(e) => updateCoupon(c.id, { code: e.target.value.toUpperCase() })}
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center gap-1">
+                              <input 
+                                type="number"
+                                className="font-bold bg-transparent border-b border-transparent hover:border-gray-400 focus:border-black focus:outline-none w-20"
+                                defaultValue={c.discount}
+                                onBlur={(e) => updateCoupon(c.id, { discount: Number(e.target.value) })}
+                              />
+                              <span>৳</span>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <button onClick={() => deleteCoupon(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded transition-colors">
+                              <Trash2 size={18}/>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
             </div>
         )}
         
-        {/* --- REVIEWS TAB (Restored) --- */}
         {activeTab === 'reviews' && (
             <div className="max-w-4xl">
                  <h2 className="text-3xl font-bold mb-6">CUSTOMER REVIEWS</h2>
@@ -341,7 +346,6 @@ export default function Admin() {
             </div>
         )}
         
-        {/* --- VISUALS TAB (Restored) --- */}
         {activeTab === 'visuals' && (
             <div className="max-w-5xl">
                 <h2 className="text-3xl font-bold mb-6">PRODUCT VISUALS</h2>
