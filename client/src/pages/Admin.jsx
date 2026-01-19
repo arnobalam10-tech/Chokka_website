@@ -10,12 +10,13 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('orders'); 
   const [orderSubTab, setOrderSubTab] = useState('All'); 
+  const [contentSubTab, setContentSubTab] = useState(1);
   
   // Data State
   const [orders, setOrders] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [product, setProduct] = useState({ price: 0, cost: 0, stock: 0, delivery_dhaka: 60, delivery_outside: 120 });
+  const [products, setProducts] = useState([]); 
   const [gallery, setGallery] = useState([]);
   
   // UI State
@@ -24,20 +25,29 @@ export default function Admin() {
   const [isBulkSending, setIsBulkSending] = useState(false);
 
   useEffect(() => {
-    fetchOrders(); fetchProduct(); fetchCoupons(); fetchReviews(); fetchGallery();
+    fetchOrders(); fetchProducts(); fetchCoupons(); fetchReviews(); fetchGallery();
   }, []);
 
   // --- API CALLS ---
   const fetchOrders = () => fetch('https://chokka-server.onrender.com/api/orders').then(r => r.json()).then(setOrders);
-  const fetchProduct = () => fetch('https://chokka-server.onrender.com/api/product').then(r => r.json()).then(setProduct);
+  const fetchProducts = () => fetch('https://chokka-server.onrender.com/api/products').then(r => r.json()).then(setProducts);
   const fetchCoupons = () => fetch('https://chokka-server.onrender.com/api/coupons').then(r => r.json()).then(setCoupons);
   const fetchReviews = () => fetch('https://chokka-server.onrender.com/api/reviews').then(r => r.json()).then(setReviews);
   const fetchGallery = () => fetch('https://chokka-server.onrender.com/api/gallery').then(r => r.json()).then(setGallery);
 
   const getStats = () => {
     const validOrders = orders.filter(o => o.status !== 'Cancelled');
-    const totalSales = validOrders.length * (product.price || 0);
-    const totalCost = validOrders.length * (product.cost || 0);
+    let totalSales = 0;
+    let totalCost = 0;
+
+    validOrders.forEach(order => {
+        const prod = products.find(p => p.id === (order.product_id || 1));
+        if (prod) {
+            totalSales += Number(prod.price);
+            totalCost += Number(prod.cost);
+        }
+    });
+
     const grossProfit = totalSales - totalCost;
     const last7Days = [...Array(7)].map((_, i) => {
         const d = new Date();
@@ -53,6 +63,11 @@ export default function Admin() {
 
   const stats = getStats();
 
+  const getProductName = (id) => {
+    const p = products.find(prod => prod.id === (id || 1));
+    return p ? p.title : "Syndicate";
+  };
+
   const sendToSteadfast = async (order) => {
     if(!confirm(`Send Order #${order.id} to Steadfast Courier?`)) return;
     setProcessingOrder(order.id);
@@ -66,7 +81,7 @@ export default function Admin() {
                 address: order.customer_address,
                 phone: order.customer_phone,
                 amount: order.total_price,
-                note: 'Handle with care'
+                note: `Game: ${getProductName(order.product_id)}`
             })
         });
         const result = await response.json();
@@ -124,23 +139,34 @@ export default function Admin() {
     return orders;
   };
 
-  const updateProduct = async () => { const res = await fetch('https://chokka-server.onrender.com/api/product', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(product) }); if(res.ok) alert("✅ Updated!"); };
+  const updateProduct = async (id, updatedData) => { 
+    const res = await fetch(`https://chokka-server.onrender.com/api/products/${id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(updatedData) 
+    }); 
+    if(res.ok) fetchProducts(); 
+  };
   
-  // --- UPDATED COUPON ACTIONS ---
   const createCoupon = async (e) => { e.preventDefault(); await fetch('https://chokka-server.onrender.com/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
+  const updateCoupon = async (id, updatedData) => { const { error } = await supabase.from('coupons').update(updatedData).eq('id', id); if (!error) { fetchCoupons(); } else { alert("Error updating coupon"); } };
+  const deleteCoupon = async (id) => { if(!confirm("Delete this coupon?")) return; const { error } = await supabase.from('coupons').delete().eq('id', id); if (!error) { fetchCoupons(); } else { alert("Error deleting coupon"); } };
   
-  const updateCoupon = async (id, updatedData) => {
-    const { error } = await supabase.from('coupons').update(updatedData).eq('id', id);
-    if (!error) { fetchCoupons(); } else { alert("Error updating coupon"); }
+  const createReview = async (e) => { 
+    e.preventDefault(); 
+    await fetch('https://chokka-server.onrender.com/api/reviews', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+            customer_name: e.target.name.value, 
+            rating: e.target.rating.value, 
+            comment: e.target.comment.value,
+            product_id: contentSubTab 
+        }) 
+    }); 
+    e.target.reset(); fetchReviews(); 
   };
 
-  const deleteCoupon = async (id) => {
-    if(!confirm("Delete this coupon?")) return;
-    const { error } = await supabase.from('coupons').delete().eq('id', id);
-    if (!error) { fetchCoupons(); } else { alert("Error deleting coupon"); }
-  };
-
-  const createReview = async (e) => { e.preventDefault(); await fetch('https://chokka-server.onrender.com/api/reviews', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_name: e.target.name.value, rating: e.target.rating.value, comment: e.target.comment.value }) }); e.target.reset(); fetchReviews(); };
   const deleteReview = async (id) => { if(!confirm("Delete?")) return; await fetch(`https://chokka-server.onrender.com/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
   const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`https://chokka-server.onrender.com/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
   
@@ -149,20 +175,19 @@ export default function Admin() {
     try {
         const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error;
         const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
-        await fetch('https://chokka-server.onrender.com/api/gallery', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption }) });
+        await fetch('https://chokka-server.onrender.com/api/gallery', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) });
         alert("✅ Upload Successful!"); e.target.reset(); fetchGallery();
     } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex font-mono text-chokka-dark">
-      {/* SIDEBAR */}
       <div className="w-64 bg-chokka-dark text-white p-6 flex flex-col gap-6 fixed h-full z-10 overflow-y-auto">
         <h1 className="text-2xl font-bold tracking-widest border-b border-gray-600 pb-4">ADMIN</h1>
         <nav className="flex flex-col gap-2">
             <button onClick={() => setActiveTab('analytics')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-chokka-green text-chokka-dark' : ''}`}><BarChart3 size={20}/> ANALYTICS</button>
             <button onClick={() => setActiveTab('orders')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'orders' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Package size={20}/> ORDERS</button>
-            <button onClick={() => setActiveTab('products')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'products' ? 'bg-chokka-green text-chokka-dark' : ''}`}><DollarSign size={20}/> PRICES & COST</button>
+            <button onClick={() => setActiveTab('products')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'products' ? 'bg-chokka-green text-chokka-dark' : ''}`}><DollarSign size={20}/> GAME SETTINGS</button>
             <button onClick={() => setActiveTab('coupons')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'coupons' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Tag size={20}/> COUPONS</button>
             <button onClick={() => setActiveTab('reviews')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'reviews' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Star size={20}/> REVIEWS</button>
             <button onClick={() => setActiveTab('visuals')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'visuals' ? 'bg-chokka-green text-chokka-dark' : ''}`}><ImageIcon size={20}/> VISUALS</button>
@@ -185,7 +210,6 @@ export default function Admin() {
                     <div className="bg-white p-6 shadow-lg border-2 border-black bg-green-50">
                         <div className="text-gray-500 font-bold mb-2 flex items-center gap-2"><DollarSign/> Gross Profit</div>
                         <div className="text-4xl font-black text-green-600">+{stats.grossProfit}৳</div>
-                        <div className="text-xs text-gray-500 mt-2 font-bold">Calculation: (Price {product.price} - Cost {product.cost}) * Orders</div>
                     </div>
                 </div>
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><Calendar/> Order Volume (Last 7 Days)</h3>
@@ -216,24 +240,24 @@ export default function Admin() {
                 </div>
                 <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="bg-gray-200 border-b-2 border-black">
-                            <tr><th className="p-4">ID</th><th className="p-4">Customer</th><th className="p-4">Amount</th><th className="p-4">Status</th><th className="p-4">Steadfast</th><th className="p-4">Manual</th><th className="p-4">Delete</th></tr>
+                        <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
+                            <tr><th className="p-4">ID</th><th className="p-4">Game</th><th className="p-4">Customer</th><th className="p-4">Amount</th><th className="p-4">Status</th><th className="p-4">Steadfast</th><th className="p-4">Manual</th><th className="p-4">Delete</th></tr>
                         </thead>
                         <tbody>
                             {getFilteredOrders().length === 0 ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-gray-500 font-bold">No orders found in "{orderSubTab}"</td></tr>
+                                <tr><td colSpan="8" className="p-8 text-center text-gray-500 font-bold">No orders found</td></tr>
                             ) : (
                                 getFilteredOrders().map(o => (
                                     <tr key={o.id} className="border-b hover:bg-gray-50 transition-colors">
-                                        <td className="p-4 font-mono">#{o.id}</td>
+                                        <td className="p-4 font-mono text-xs text-gray-400">#{o.id}</td>
+                                        <td className="p-4 font-bold text-[10px]"><span className="bg-blue-50 text-blue-700 px-2 py-1 border border-blue-200 uppercase">{getProductName(o.product_id)}</span></td>
                                         <td className="p-4">
                                             <div className="font-bold">{o.customer_name}</div>
-                                            <div className="text-sm text-gray-500">{o.customer_phone}</div>
-                                            <div className="text-xs text-gray-400 max-w-[200px]">{o.customer_address}</div>
+                                            <div className="text-xs text-gray-400">{o.customer_phone}</div>
                                         </td>
                                         <td className="p-4 font-bold text-lg">{o.total_price}৳</td>
                                         <td className="p-4">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide
+                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide
                                                 ${!o.status || o.status === 'Pending' || o.status === 'Pickup Pending' ? 'bg-yellow-200 text-yellow-800' : ''}
                                                 ${o.status === 'Steadfast_Posted' ? 'bg-blue-200 text-blue-800' : ''}
                                                 ${o.status === 'Dispatched' ? 'bg-purple-200 text-purple-800' : ''}
@@ -241,19 +265,18 @@ export default function Admin() {
                                                 ${o.status === 'Cancelled' ? 'bg-red-200 text-red-800' : ''}`}>
                                                 {o.status || 'Pending'}
                                             </span>
-                                            {o.tracking_code && <div className="text-xs font-mono mt-1 text-gray-500">Track: {o.tracking_code}</div>}
+                                            {o.tracking_code && <div className="text-[10px] font-mono mt-1 text-gray-400">Track: {o.tracking_code}</div>}
                                         </td>
                                         <td className="p-4">
                                             {(!o.status || o.status === 'Pending' || o.status === 'Pickup Pending') ? (
-                                                <button onClick={() => sendToSteadfast(o)} disabled={processingOrder === o.id} className="bg-green-600 text-white px-4 py-2 text-sm font-bold hover:bg-green-700 flex items-center gap-2 rounded shadow disabled:opacity-50">
-                                                    {processingOrder === o.id ? '...' : <><Send size={16}/> Send</>}
+                                                <button onClick={() => sendToSteadfast(o)} disabled={processingOrder === o.id} className="bg-green-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-green-700 flex items-center gap-1.5 rounded shadow disabled:opacity-50">
+                                                    {processingOrder === o.id ? '...' : <><Send size={14}/> Send</>}
                                                 </button>
-                                            ) : ( o.status === 'Steadfast_Posted' && <span className="text-blue-600 font-bold text-sm flex items-center gap-1"><CheckCircle size={14}/> Sent</span> )}
+                                            ) : ( o.status === 'Steadfast_Posted' && <span className="text-blue-600 font-bold text-[10px] flex items-center gap-1"><CheckCircle size={12}/> Posted</span> )}
                                         </td>
                                         <td className="p-4">
-                                            <select className="border-2 border-gray-300 p-1 text-sm font-bold rounded" value={o.status || 'Pending'} onChange={(e) => updateOrderStatus(o.id, e.target.value)}>
+                                            <select className="border-2 border-gray-300 p-1 text-[10px] font-bold rounded" value={o.status || 'Pending'} onChange={(e) => updateOrderStatus(o.id, e.target.value)}>
                                                 <option value="Pickup Pending">Pickup Pending</option>
-                                                <option value="Steadfast_Posted" disabled>Pickup Sent</option>
                                                 <option value="Dispatched">Dispatched</option>
                                                 <option value="Delivered">Delivered</option>
                                                 <option value="Cancelled">Cancelled</option>
@@ -272,16 +295,43 @@ export default function Admin() {
         )}
 
         {activeTab === 'products' && (
-            <div className="max-w-xl">
-                <h2 className="text-3xl font-bold mb-6">GAME SETTINGS</h2>
-                <div className="bg-white p-8 shadow-lg border-2 border-black flex flex-col gap-6">
-                    <div><label className="block font-bold mb-2">Selling Price (Taka)</label><input type="number" className="w-full p-3 border-2 border-gray-300 font-bold text-lg" value={product.price} onChange={e => setProduct({...product, price: Number(e.target.value)})}/></div>
-                    <div><label className="block font-bold mb-2 text-red-600 flex items-center gap-2"><AlertCircle size={16}/> Manufacturing Cost (For Profit Calc)</label><input type="number" className="w-full p-3 border-2 border-red-200 font-bold text-lg" value={product.cost || 0} onChange={e => setProduct({...product, cost: Number(e.target.value)})}/></div>
-                    <div className="flex gap-4">
-                        <div className="w-1/2"><label className="block font-bold mb-2 text-sm">Dhaka Ship</label><input type="number" className="w-full p-3 border-2 border-gray-300 font-bold" value={product.delivery_dhaka} onChange={e => setProduct({...product, delivery_dhaka: Number(e.target.value)})}/></div>
-                        <div className="w-1/2"><label className="block font-bold mb-2 text-sm">Outside Ship</label><input type="number" className="w-full p-3 border-2 border-gray-300 font-bold" value={product.delivery_outside} onChange={e => setProduct({...product, delivery_outside: Number(e.target.value)})}/></div>
+            <div>
+                <h2 className="text-3xl font-bold mb-6 uppercase tracking-tight">Game Settings</h2>
+                <div className="grid grid-cols-1 gap-4 max-w-4xl">
+                  {products.length > 0 ? products.map(p => (
+                    <div key={p.id} className="bg-white p-6 shadow-lg border-2 border-black flex flex-col md:flex-row gap-6 items-center">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-black text-chokka-dark uppercase">{p.title}</h3>
+                        <p className="text-xs font-bold text-gray-400">DATABASE ID: {p.id}</p>
+                      </div>
+                      <div className="flex gap-4 flex-wrap">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase">Selling Price</label>
+                          <input type="number" className="w-24 p-2 border-2 border-gray-300 font-black focus:border-chokka-green outline-none" defaultValue={p.price} onBlur={(e) => updateProduct(p.id, { price: Number(e.target.value) })} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-red-500 uppercase">Mfg Cost</label>
+                          <input type="number" className="w-24 p-2 border-2 border-red-100 font-black focus:border-red-500 outline-none" defaultValue={p.cost} onBlur={(e) => updateProduct(p.id, { cost: Number(e.target.value) })} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase">Dhaka Ship</label>
+                          <input type="number" className="w-20 p-2 border-2 border-gray-100 font-bold focus:border-black outline-none" defaultValue={p.delivery_dhaka} onBlur={(e) => updateProduct(p.id, { delivery_dhaka: Number(e.target.value) })} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-500 uppercase">Outside Ship</label>
+                          <input type="number" className="w-20 p-2 border-2 border-gray-100 font-bold focus:border-black outline-none" defaultValue={p.delivery_outside} onBlur={(e) => updateProduct(p.id, { delivery_outside: Number(e.target.value) })} />
+                        </div>
+                      </div>
+                      <div className="bg-chokka-green p-3 border-l-4 border-chokka-dark min-w-[120px]">
+                        <span className="text-[10px] font-black block leading-tight">PROFIT/BOX</span>
+                        <span className="text-xl font-black tracking-tighter">+{p.price - p.cost}৳</span>
+                      </div>
                     </div>
-                    <button onClick={updateProduct} className="bg-chokka-green text-chokka-dark py-4 font-bold text-xl hover:bg-green-400 border-2 border-black flex justify-center gap-2"><Save /> SAVE CHANGES</button>
+                  )) : (
+                    <div className="p-10 text-center border-2 border-dashed border-gray-300 font-bold text-gray-400 uppercase tracking-widest italic">
+                      Fetching Game Data...
+                    </div>
+                  )}
                 </div>
             </div>
         )}
@@ -303,27 +353,16 @@ export default function Admin() {
                       {coupons.map(c => (
                         <tr key={c.id} className="border-b">
                           <td className="p-3">
-                            <input 
-                              className="font-bold text-green-700 bg-transparent border-b border-transparent hover:border-gray-400 focus:border-green-700 focus:outline-none uppercase w-full"
-                              defaultValue={c.code}
-                              onBlur={(e) => updateCoupon(c.id, { code: e.target.value.toUpperCase() })}
-                            />
+                            <input className="font-bold text-green-700 bg-transparent border-b border-transparent hover:border-gray-400 focus:border-green-700 focus:outline-none uppercase w-full" defaultValue={c.code} onBlur={(e) => updateCoupon(c.id, { code: e.target.value.toUpperCase() })} />
                           </td>
                           <td className="p-3">
                             <div className="flex items-center gap-1">
-                              <input 
-                                type="number"
-                                className="font-bold bg-transparent border-b border-transparent hover:border-gray-400 focus:border-black focus:outline-none w-20"
-                                defaultValue={c.discount}
-                                onBlur={(e) => updateCoupon(c.id, { discount: Number(e.target.value) })}
-                              />
+                              <input type="number" className="font-bold bg-transparent border-b border-transparent hover:border-gray-400 focus:border-black focus:outline-none w-20" defaultValue={c.discount} onBlur={(e) => updateCoupon(c.id, { discount: Number(e.target.value) })} />
                               <span>৳</span>
                             </div>
                           </td>
                           <td className="p-3">
-                            <button onClick={() => deleteCoupon(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded transition-colors">
-                              <Trash2 size={18}/>
-                            </button>
+                            <button onClick={() => deleteCoupon(c.id)} className="text-red-500 hover:bg-red-50 p-2 rounded transition-colors"><Trash2 size={18}/></button>
                           </td>
                         </tr>
                       ))}
@@ -335,26 +374,62 @@ export default function Admin() {
         
         {activeTab === 'reviews' && (
             <div className="max-w-4xl">
-                 <h2 className="text-3xl font-bold mb-6">CUSTOMER REVIEWS</h2>
+                 <h2 className="text-3xl font-bold mb-6 text-chokka-dark uppercase tracking-tight">Customer Reviews</h2>
+                 <div className="flex gap-4 mb-6">
+                    <button onClick={() => setContentSubTab(1)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
+                    <button onClick={() => setContentSubTab(2)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
+                    <button onClick={() => setContentSubTab(3)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
+                 </div>
+
                  <form onSubmit={createReview} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex gap-4 items-end flex-wrap">
                     <div><label className="font-bold block text-sm mb-1">Name</label><input name="name" required type="text" placeholder="Sakib" className="border-2 border-gray-300 p-2 font-bold w-48"/></div>
                     <div><label className="font-bold block text-sm mb-1">Rating</label><select name="rating" className="border-2 border-gray-300 p-2 font-bold w-24"><option value="5">5 ★</option><option value="4">4 ★</option></select></div>
                     <div className="w-full"><label className="font-bold block text-sm mb-1">Comment</label><textarea name="comment" required placeholder="Comment..." className="border-2 border-gray-300 p-2 font-bold w-full h-20 resize-none"/></div>
-                    <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2"><Plus size={18}/> POST REVIEW</button>
+                    <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2">
+                        <Plus size={18}/> POST FOR {contentSubTab === 1 ? 'SYNDICATE' : contentSubTab === 2 ? 'TONG' : 'BUNDLE'}
+                    </button>
                  </form>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{reviews.map(r => <div key={r.id} className="bg-white border-2 border-black p-4 shadow-md relative group"><div className="flex justify-between"><div><div className="text-yellow-500">{"★".repeat(r.rating)}</div><h4 className="font-bold">{r.customer_name}</h4></div><button onClick={() => deleteReview(r.id)} className="text-red-500 hover:bg-red-50 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button></div><p className="mt-2 text-gray-600 italic text-sm">"{r.comment}"</p></div>)}</div>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {reviews.filter(r => (r.product_id || 1) === contentSubTab).map(r => (
+                        <div key={r.id} className="bg-white border-2 border-black p-4 shadow-md relative group transition-transform hover:scale-[1.01]">
+                            <div className="flex justify-between">
+                                <div><div className="text-yellow-500">{"★".repeat(r.rating)}</div><h4 className="font-bold">{r.customer_name}</h4></div>
+                                <button onClick={() => deleteReview(r.id)} className="text-red-500 hover:bg-red-50 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
+                            </div>
+                            <p className="mt-2 text-gray-600 italic text-sm">"{r.comment}"</p>
+                        </div>
+                    ))}
+                 </div>
             </div>
         )}
         
         {activeTab === 'visuals' && (
             <div className="max-w-5xl">
-                <h2 className="text-3xl font-bold mb-6">PRODUCT VISUALS</h2>
+                <h2 className="text-3xl font-bold mb-6 text-chokka-dark uppercase tracking-tight">Product Visuals</h2>
+                <div className="flex gap-4 mb-6">
+                    <button onClick={() => setContentSubTab(1)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
+                    <button onClick={() => setContentSubTab(2)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
+                    <button onClick={() => setContentSubTab(3)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
+                </div>
+
                 <form onSubmit={handleUploadAndSave} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-col md:flex-row gap-4 items-end bg-green-50">
                     <div className="w-full"><label className="font-bold block text-sm mb-1">Select Photo</label><input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold w-full bg-white"/></div>
                     <div><label className="font-bold block text-sm mb-1">Caption</label><input name="caption" type="text" placeholder="Detail Shot" className="border-2 border-black p-2 font-bold w-48"/></div>
-                    <button disabled={uploading} className="bg-black text-white px-6 py-2.5 font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50">{uploading ? 'UPLOADING...' : <><Upload size={18}/> UPLOAD</>}</button>
+                    <button disabled={uploading} className="bg-black text-white px-6 py-2.5 font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50 min-w-[140px]">
+                        {uploading ? 'UPLOADING...' : <><Upload size={18}/> UPLOAD TO {contentSubTab === 1 ? 'SYNDICATE' : contentSubTab === 2 ? 'TONG' : 'BUNDLE'}</>}
+                    </button>
                 </form>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">{gallery.map(img => <div key={img.id} className="bg-white border-2 border-black p-2 relative group shadow-lg"><img src={img.image_url} alt="Visual" className="w-full h-48 object-cover border border-gray-200 bg-gray-100"/>{img.caption && <div className="mt-2 font-bold text-xs text-center uppercase tracking-wider">{img.caption}</div>}<button onClick={() => deleteImage(img.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={16} /></button></div>)}</div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    {gallery.filter(img => (img.product_id || 1) === contentSubTab).map(img => (
+                        <div key={img.id} className="bg-white border-2 border-black p-2 relative group shadow-lg overflow-hidden">
+                            <img src={img.image_url} alt="Visual" className="w-full h-48 object-cover border border-gray-200 bg-gray-100 transition-transform group-hover:scale-105"/>
+                            {img.caption && <div className="mt-2 font-bold text-[10px] text-center uppercase tracking-wider text-gray-600">{img.caption}</div>}
+                            <button onClick={() => deleteImage(img.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={16} /></button>
+                        </div>
+                    ))}
+                </div>
             </div>
         )}
       </div>

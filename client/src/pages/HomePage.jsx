@@ -1,225 +1,276 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { ShoppingCart, Trophy, Users, Clock, ShieldAlert, Zap, Menu, X, ArrowDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShoppingCart, ArrowRight, Zap, ShieldAlert, Package, Truck, Award, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import CheckoutModal from '../components/CheckoutModal';
-import ReviewMarquee from '../components/ReviewMarquee';
+
+const QUIRKY_TAGLINES = [
+  "Ready for the next game night?",
+  "I guess your hangouts are boring without us.",
+  "Cheaper than therapy, but causes more trauma.",
+  "Warning: May cause extreme trust issues.",
+  "Trust no one. Not even your best friend.",
+  "Because Ludo is for kids.",
+  "The only time lying to your friends is okay.",
+  "Making friendships awkward since 2026.",
+  "Who is the real snake in your group?",
+  "Don't hate the player, hate the cards.",
+  "Your tea breaks just got dangerous.",
+  "Better than scrolling TikTok together.",
+  "Guaranteed to ruin at least one friendship.",
+  "Add some masala to your hangout.",
+  "Are you brave enough to play?",
+  "Keep your friends close, and your cards closer.",
+  "100% Desi. 100% Chaotic.",
+  "Did you really think they were telling the truth?",
+  "Bluff your way to the top.",
+  "Spice level: Naga Chili."
+];
 
 export default function HomePage() {
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isBundleCheckoutOpen, setIsBundleCheckoutOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
+  const [randomTagline, setRandomTagline] = useState("");
   
-  // --- RESTORED: Reviews State ---
-  const [reviews, setReviews] = useState([]); 
-  
-  // STATE: Product Info
-  const [product, setProduct] = useState({
-    id: 1,
-    title: "The Syndicate",
-    price: 360 // Default
+  // Image Cycling State
+  const [synIndex, setSynIndex] = useState(0);
+  const [tongIndex, setTongIndex] = useState(0);
+
+  // State for the Bundle Product (ID: 3)
+  const [bundleProduct, setBundleProduct] = useState({
+    id: 3,
+    title: "Chokka Bundle",
+    price: 600 
   });
 
-  // FETCH DATA
+  // 1. Fetch Data & Set Random Tagline
   useEffect(() => {
-    const API_URL = 'https://chokka-server.onrender.com'; // Ensure this matches your live backend
+    // Set random tagline on mount
+    setRandomTagline(QUIRKY_TAGLINES[Math.floor(Math.random() * QUIRKY_TAGLINES.length)]);
 
-    fetch(`${API_URL}/api/product`)
+    const API_URL = 'https://chokka-server.onrender.com'; 
+
+    fetch(`${API_URL}/api/products`)
       .then(res => res.json())
-      .then(data => { if (data?.price) setProduct(data); })
-      .catch(err => console.error("API Error"));
+      .then(data => {
+        if (Array.isArray(data)) {
+            const bundle = data.find(p => p.id === 3);
+            if (bundle) setBundleProduct(bundle);
+        }
+      })
+      .catch(err => console.error("Error fetching bundle"));
 
     fetch(`${API_URL}/api/gallery`)
       .then(res => res.json())
       .then(data => setGallery(data || []))
-      .catch(() => {});
-
-    // --- RESTORED: Fetch Reviews ---
-    fetch(`${API_URL}/api/reviews`)
-      .then(res => res.json())
-      .then(data => setReviews(data || []))
-      .catch(() => {});
+      .catch(err => console.error("Error fetching images"));
   }, []);
 
+  // 2. Filter Images
+  const syndicateImages = gallery.filter(img => (img.product_id || 1) === 1);
+  const tongImages = gallery.filter(img => (img.product_id || 1) === 2);
+
+  // 3. Cycle Timers
+  useEffect(() => {
+    if (syndicateImages.length > 1) {
+        const interval = setInterval(() => setSynIndex(prev => (prev + 1) % syndicateImages.length), 5000);
+        return () => clearInterval(interval);
+    }
+  }, [syndicateImages.length]);
+
+  useEffect(() => {
+    if (tongImages.length > 1) {
+        const interval = setInterval(() => setTongIndex(prev => (prev + 1) % tongImages.length), 5000);
+        return () => clearInterval(interval);
+    }
+  }, [tongImages.length]);
+
+  // Animation Variants
+  const fadeInUp = {
+    hidden: { opacity: 0, y: 30 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  };
+
   return (
-    <div className="min-h-screen bg-[#f8f5e6] font-sans text-[#1a3325] selection:bg-[#2e8b57] selection:text-white overflow-x-hidden">
+    <div className="min-h-screen bg-[#f8f5e6] font-sans text-[#1a3325] selection:bg-[#1a3325] selection:text-[#f8f5e6] flex flex-col overflow-x-hidden">
       
-      {/* --- NAVBAR --- */}
-      <nav className="fixed top-0 w-full z-40 px-6 py-3 flex justify-between items-center bg-[#f8f5e6]/95 backdrop-blur-md border-b-4 border-[#1a3325]">
-        <div className="flex items-center gap-4 cursor-pointer">
-           <motion.img 
-             whileHover={{ rotate: -5, scale: 1.05 }} 
-             src="/logo.png" 
-             alt="CHOKKA" 
-             className="w-16 h-16 object-contain" 
-           />
-           <span className="font-black text-xl tracking-widest uppercase hidden md:block">The Syndicate</span>
+      {/* --- 1. BRAND NAVBAR (Mobile Fixed) --- */}
+      <nav className="fixed top-0 w-full z-50 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center backdrop-blur-md border-b-4 border-[#1a3325] bg-[#f8f5e6]/95">
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
+           <img src="/logo.png" alt="CHOKKA" className="w-10 h-10 md:w-12 md:h-12 object-contain" />
+           <span className="font-black text-lg md:text-2xl tracking-widest uppercase">CHOKKA.CO</span>
         </div>
         
-        <div className="hidden md:flex items-center gap-8 font-bold text-sm uppercase tracking-widest">
-            <a href="#story" className="hover:text-[#2e8b57] transition-colors">The Story</a>
-            <a href="#features" className="hover:text-[#2e8b57] transition-colors">Cards</a>
-            <a href="#visuals" className="hover:text-[#2e8b57] transition-colors">Visuals</a>
-            <button 
-                onClick={() => setIsCheckoutOpen(true)}
-                className="bg-[#2e8b57] text-white px-6 py-2 border-2 border-[#1a3325] shadow-[4px_4px_0px_0px_rgba(26,51,37,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all flex items-center gap-2"
-            >
-                BUY NOW <ShoppingCart size={18} />
-            </button>
-        </div>
-
-        <button 
-            onClick={() => setIsCheckoutOpen(true)}
-            className="md:hidden bg-[#2e8b57] text-white px-4 py-2 font-bold text-xs uppercase tracking-widest border-2 border-[#1a3325] shadow-[2px_2px_0px_0px_rgba(26,51,37,1)] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all flex items-center gap-2"
+        <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsBundleCheckoutOpen(true)}
+            className="bg-[#1a3325] text-[#f8f5e6] px-4 py-2 md:px-6 md:py-2.5 font-bold text-[10px] md:text-sm uppercase tracking-widest border-2 border-transparent hover:border-[#2e8b57] transition-all shadow-lg flex items-center gap-2 whitespace-nowrap"
         >
-            BUY <ShoppingCart size={16} />
-        </button>
+            <Package size={16} className="md:w-5 md:h-5"/> 
+            <span>Get Bundle</span>
+        </motion.button>
       </nav>
 
-      {/* --- HERO SECTION --- */}
-      <header className="relative pt-32 pb-20 px-4 min-h-screen flex flex-col items-center justify-center max-w-7xl mx-auto text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 50 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="z-10"
+      {/* --- 2. HERO SECTION --- */}
+      <div className="pt-32 pb-10 px-4 max-w-7xl mx-auto flex-grow w-full flex flex-col justify-center relative">
+        <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
+        
+        <motion.div 
+            initial="hidden"
+            animate="visible"
+            variants={fadeInUp}
+            className="text-center mb-12 md:mb-16 relative z-10"
         >
-          <div className="inline-flex items-center gap-2 bg-[#1a3325] text-[#f8f5e6] px-4 py-2 text-xs md:text-sm font-bold uppercase tracking-widest mb-8 rounded-full border-2 border-[#2e8b57]">
-            <Trophy size={14} className="text-yellow-400"/>
-            <span>#1 Strategy Card Game in Bangladesh</span>
-          </div>
-
-          <h1 className="font-black text-6xl md:text-8xl lg:text-[10rem] mb-4 leading-[0.85] tracking-tighter text-[#1a3325] drop-shadow-sm">
-            THE <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#2e8b57] to-[#1a3325]">SYNDICATE</span>
-          </h1>
-
-          <p className="text-xl md:text-3xl font-bold text-[#1a3325]/80 mb-10 max-w-3xl mx-auto leading-tight mt-6">
-            Trust No One. Betray Everyone. <br/>
-            <span className="text-[#2e8b57]">The Ultimate Game of Power & Deception.</span>
-          </p>
-
-          <div className="flex flex-col md:flex-row gap-6 justify-center items-center">
-            <button 
-                onClick={() => setIsCheckoutOpen(true)}
-                className="bg-[#1a3325] text-white text-xl md:text-2xl px-12 py-5 border-4 border-transparent hover:border-[#2e8b57] hover:bg-black transition-all font-black tracking-widest uppercase shadow-2xl hover:-translate-y-1 w-full md:w-auto"
-            >
-              Order Now • {product.price}৳
-            </button>
-            <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-widest opacity-70">
-                <Clock className="w-5 h-5"/> 
-                <span>2-6 Players • 15 Mins</span>
-            </div>
-          </div>
+            <h1 className="text-5xl md:text-8xl font-black leading-[0.9] mb-4 text-[#1a3325] uppercase tracking-tighter">
+                Choose Your <br/>
+                <span className="text-[#2e8b57]">Battle</span>
+            </h1>
+            <p className="text-lg md:text-2xl font-bold opacity-80 max-w-2xl mx-auto leading-tight italic">
+                "{randomTagline}"
+            </p>
         </motion.div>
-      </header>
 
-      {/* --- THE STORY --- */}
-      <section id="story" className="py-24 px-6 bg-[#1a3325] text-[#f8f5e6] border-y-4 border-black relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-        <div className="max-w-4xl mx-auto text-center relative z-10">
-            <h2 className="text-3xl md:text-5xl font-black mb-8 uppercase tracking-tight">
-                Welcome to the <span className="text-[#2e8b57]">Underworld</span>
-            </h2>
-            <div className="space-y-6 text-lg md:text-2xl leading-relaxed font-medium opacity-90">
-                <p>
-                    In the shadows of Dhaka, five rival families fight for control. 
-                    <span className="text-[#2e8b57]"> Corruption is currency</span>, and loyalty is just a word.
-                </p>
-                <p>
-                    <strong>The Syndicate</strong> is a fast-paced game of hidden identities. 
-                    Eliminate your rivals' influence and be the last boss standing. 
-                    Will you play it safe, or lie straight to your best friend's face?
-                </p>
-            </div>
-        </div>
-      </section>
-
-      {/* --- FEATURES --- */}
-      <section id="features" className="py-24 px-6 max-w-7xl mx-auto">
-        <div className="text-center mb-16">
-            <span className="font-bold uppercase tracking-widest text-[#2e8b57]">Game Mechanics</span>
-            <h2 className="text-4xl md:text-6xl font-black text-[#1a3325] mt-2">HOW TO WIN</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-white p-8 border-4 border-[#1a3325] shadow-[8px_8px_0px_0px_rgba(26,51,37,1)] hover:-translate-y-2 transition-transform group">
-                <div className="w-20 h-20 bg-[#2e8b57] flex items-center justify-center rounded-full mb-6 border-4 border-[#1a3325] group-hover:rotate-12 transition-transform">
-                    <ShieldAlert size={40} color="white"/>
-                </div>
-                <h3 className="text-2xl font-black uppercase mb-4">Bluff & Deceive</h3>
-                <p className="font-medium opacity-80 text-lg">Don't have the cards? Lie! Claim you're the Police Commissioner. Just don't get caught.</p>
-            </div>
-            <div className="bg-white p-8 border-4 border-[#1a3325] shadow-[8px_8px_0px_0px_rgba(26,51,37,1)] hover:-translate-y-2 transition-transform group">
-                <div className="w-20 h-20 bg-[#1a3325] flex items-center justify-center rounded-full mb-6 border-4 border-[#1a3325] group-hover:rotate-12 transition-transform">
-                    <Zap size={40} color="white"/>
-                </div>
-                <h3 className="text-2xl font-black uppercase mb-4">Fast Paced</h3>
-                <p className="font-medium opacity-80 text-lg">No boring setup. Rounds last 15 minutes. Perfect for quick breaks or long game nights.</p>
-            </div>
-            <div className="bg-white p-8 border-4 border-[#1a3325] shadow-[8px_8px_0px_0px_rgba(26,51,37,1)] hover:-translate-y-2 transition-transform group">
-                <div className="w-20 h-20 bg-[#f4e4bc] flex items-center justify-center rounded-full mb-6 border-4 border-[#1a3325] group-hover:rotate-12 transition-transform">
-                    <Users size={40} color="#1a3325"/>
-                </div>
-                <h3 className="text-2xl font-black uppercase mb-4">Ruins Friendships</h3>
-                <p className="font-medium opacity-80 text-lg">Designed to create chaos. Backstab your friends and ruin relationships—all in good fun, of course.</p>
-            </div>
-        </div>
-      </section>
-
-      {/* --- PRODUCT VISUALS --- */}
-      <section id="visuals" className="py-20 bg-[#e8e4d0]">
-        <div className="max-w-7xl mx-auto px-6">
-            <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
-                <div>
-                    <span className="font-bold uppercase tracking-widest text-[#2e8b57]">Inside the Box</span>
-                    <h2 className="text-4xl md:text-5xl font-black text-[#1a3325] uppercase mt-2">
-                        This is what you will get
-                    </h2>
-                </div>
-                <span className="font-bold opacity-60 uppercase border-b-2 border-[#1a3325]">@TheSyndicateBD</span>
-            </div>
-            {gallery.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {gallery.map((img, idx) => (
-                        <div key={idx} className="aspect-square bg-white border-4 border-[#1a3325] overflow-hidden group relative shadow-lg">
-                            <img src={img.image_url} alt="Game Shot" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 px-0 md:px-8 relative z-10">
+            
+            {/* GAME 1: THE SYNDICATE */}
+            <Link to="/syndicate" className="group relative block h-full">
+                <div className="absolute inset-0 bg-[#2e8b57] translate-x-3 translate-y-3 rounded-xl"></div>
+                <div className="relative bg-[#f8f5e6] border-4 border-[#1a3325] rounded-xl p-6 md:p-8 h-full flex flex-col justify-between hover:-translate-y-1 hover:-translate-x-1 transition-transform cursor-pointer overflow-hidden">
+                    <div className="mb-6 z-10 relative">
+                        <div className="flex justify-between items-start mb-4">
+                            <span className="bg-[#1a3325] text-white px-3 py-1 text-[10px] md:text-xs font-bold uppercase tracking-widest rounded-full">Bestseller</span>
+                            <ShieldAlert size={28} className="text-[#2e8b57]"/>
                         </div>
-                    ))}
+                        <h2 className="text-3xl md:text-4xl font-black uppercase mb-1 leading-none">The Syndicate</h2>
+                        <p className="font-bold opacity-70 text-sm md:text-base">Mafia Strategy & Bluffing.</p>
+                    </div>
+
+                    <div className="mt-auto relative w-full h-56 md:h-64 border-2 border-[#1a3325] bg-gray-200 mb-6 overflow-hidden rounded-lg shadow-inner">
+                        <AnimatePresence mode='wait'>
+                            {syndicateImages.length > 0 ? (
+                                <motion.img 
+                                    key={synIndex}
+                                    initial={{ opacity: 0, scale: 1.1 }} 
+                                    animate={{ opacity: 1, scale: 1 }} 
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.7 }}
+                                    src={syndicateImages[synIndex].image_url} 
+                                    alt="Syndicate" 
+                                    className="w-full h-full object-cover absolute inset-0"
+                                />
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase text-xs">No Visuals</div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    <button className="w-full py-3 md:py-4 bg-[#1a3325] text-[#f8f5e6] font-black uppercase tracking-widest text-sm md:text-base flex items-center justify-center gap-2 group-hover:bg-[#2e8b57] transition-colors rounded-lg">
+                        Enter the Underworld <ArrowRight size={18}/>
+                    </button>
                 </div>
-            ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 opacity-40">
-                    {[1,2,3,4].map(i => (
-                        <div key={i} className="aspect-square bg-gray-300 border-4 border-[#1a3325] flex items-center justify-center font-bold text-xl uppercase">Card Preview {i}</div>
-                    ))}
+            </Link>
+
+            {/* GAME 2: TONG */}
+            <Link to="/tong" className="group relative block h-full">
+                <div className="absolute inset-0 bg-[#e63946] translate-x-3 translate-y-3 rounded-xl"></div>
+                <div className="relative bg-[#f8f5e6] border-4 border-[#1a3325] rounded-xl p-6 md:p-8 h-full flex flex-col justify-between hover:-translate-y-1 hover:-translate-x-1 transition-transform cursor-pointer overflow-hidden">
+                    <div className="mb-6 z-10 relative">
+                        <div className="flex justify-between items-start mb-4">
+                            <span className="bg-[#e63946] text-white px-3 py-1 text-[10px] md:text-xs font-bold uppercase tracking-widest rounded-full">New Release</span>
+                            <Zap size={28} className="text-[#e63946]"/>
+                        </div>
+                        <h2 className="text-3xl md:text-4xl font-black uppercase mb-1 leading-none">Tong</h2>
+                        <p className="font-bold opacity-70 text-sm md:text-base mb-1">The Desi Bluffing Game.</p>
+                        <p className="text-xs font-bold opacity-50 uppercase tracking-wide">
+                            Cha • Bon • Paan • Muri
+                        </p>
+                    </div>
+
+                    <div className="mt-auto relative w-full h-56 md:h-64 border-2 border-[#1a3325] bg-gray-200 mb-6 overflow-hidden rounded-lg shadow-inner">
+                        <AnimatePresence mode='wait'>
+                            {tongImages.length > 0 ? (
+                                <motion.img 
+                                    key={tongIndex}
+                                    initial={{ opacity: 0, scale: 1.1 }} 
+                                    animate={{ opacity: 1, scale: 1 }} 
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.7 }}
+                                    src={tongImages[tongIndex].image_url} 
+                                    alt="Tong" 
+                                    className="w-full h-full object-cover absolute inset-0"
+                                />
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase text-xs">No Visuals</div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    <button className="w-full py-3 md:py-4 bg-[#1a3325] text-[#f8f5e6] font-black uppercase tracking-widest text-sm md:text-base flex items-center justify-center gap-2 group-hover:bg-[#e63946] transition-colors rounded-lg">
+                        Pass the Paan <ArrowRight size={18}/>
+                    </button>
                 </div>
-            )}
+            </Link>
+
+        </div>
+      </div>
+
+      {/* --- 3. BUNDLE BANNER (Moved Up) --- */}
+      <section className="bg-[#f8f5e6] border-y-4 border-[#1a3325] py-16 px-4 relative overflow-hidden">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
+            <div className="text-center md:text-left">
+                <h3 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-2 leading-none text-[#1a3325]">
+                    Wanna get <span className="text-[#2e8b57]">both?</span>
+                </h3>
+                <p className="font-bold opacity-70 text-lg md:text-xl text-[#1a3325]">
+                    Get both games and save big. Why choose one?
+                </p>
+            </div>
+            <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsBundleCheckoutOpen(true)}
+                className="bg-[#1a3325] text-[#f8f5e6] px-10 py-5 text-xl font-black uppercase tracking-widest shadow-[6px_6px_0px_0px_#2e8b57] hover:shadow-none transition-all flex items-center gap-3 rounded-lg"
+            >
+                Buy Bundle • {bundleProduct.price}৳ <ShoppingCart size={24}/>
+            </motion.button>
         </div>
       </section>
 
-      {/* --- RESTORED: Passing Reviews Data --- */}
-      <ReviewMarquee reviews={reviews} />
+      {/* --- 4. WHY CHOKKA? (Moved Down) --- */}
+      <section className="bg-[#1a3325] text-[#f8f5e6] py-16 px-4 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10 text-center relative z-10">
+            <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.1 }} className="flex flex-col items-center">
+                <div className="bg-[#2e8b57] p-4 rounded-full border-4 border-[#f8f5e6] mb-4 shadow-lg"><Truck size={32} className="text-[#f8f5e6]"/></div>
+                <h3 className="font-black text-xl uppercase mb-2">Fast Delivery</h3>
+                <p className="opacity-70 text-sm max-w-xs">Nationwide shipping via Steadfast. 2-3 days to your doorstep.</p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.2 }} className="flex flex-col items-center">
+                <div className="bg-[#2e8b57] p-4 rounded-full border-4 border-[#f8f5e6] mb-4 shadow-lg"><Award size={32} className="text-[#f8f5e6]"/></div>
+                <h3 className="font-black text-xl uppercase mb-2">Premium Quality</h3>
+                <p className="opacity-70 text-sm max-w-xs">High-GSM cards, durable boxes, and art that stands out.</p>
+            </motion.div>
+            <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} transition={{ delay: 0.3 }} className="flex flex-col items-center">
+                <div className="bg-[#2e8b57] p-4 rounded-full border-4 border-[#f8f5e6] mb-4 shadow-lg"><Users size={32} className="text-[#f8f5e6]"/></div>
+                <h3 className="font-black text-xl uppercase mb-2">Community First</h3>
+                <p className="opacity-70 text-sm max-w-xs">Join thousands of players in the growing Chokka community.</p>
+            </motion.div>
+        </div>
+      </section>
 
       {/* --- FOOTER --- */}
-      <footer className="bg-[#1a3325] text-[#f8f5e6] py-16 text-center border-t-4 border-[#2e8b57]">
-        <h2 className="font-black text-3xl md:text-5xl mb-6 tracking-tighter">THE SYNDICATE</h2>
-        <div className="flex justify-center gap-6 mb-8 font-bold uppercase tracking-widest text-sm">
-            <a href="https://www.instagram.com/chokka.co/" target="_blank" rel="noopener noreferrer" className="hover:text-[#2e8b57]">Instagram</a>
-            <a href="https://www.facebook.com/chobify" target="_blank" rel="noopener noreferrer" className="hover:text-[#2e8b57]">Facebook</a>
-        </div>
-        <p className="opacity-50 text-xs md:text-sm mb-8">© 2026 Chokka Collectives BD </p>
-        
-        <button 
-             onClick={() => setIsCheckoutOpen(true)}
-             className="bg-[#2e8b57] text-white px-8 py-3 font-bold uppercase tracking-widest hover:bg-[#f8f5e6] hover:text-[#1a3325] transition-colors border-2 border-transparent hover:border-[#2e8b57]"
-        >
-            Get the Game Now
-        </button>
+      <footer className="bg-[#112218] text-[#f8f5e6] py-8 text-center text-xs font-bold uppercase tracking-widest opacity-80">
+        © 2026 Chokka Collectives BD • Designed in Dhaka
       </footer>
 
+      {/* --- CHECKOUT MODAL --- */}
       <CheckoutModal 
-        isOpen={isCheckoutOpen} 
-        onClose={() => setIsCheckoutOpen(false)} 
-        product={product}
+        isOpen={isBundleCheckoutOpen} 
+        onClose={() => setIsBundleCheckoutOpen(false)} 
+        product={bundleProduct}
       />
+
     </div>
   );
 }
