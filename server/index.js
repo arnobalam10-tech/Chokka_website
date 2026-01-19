@@ -233,12 +233,19 @@ app.get('/api/reviews', async (req, res) => {
   }
 });
 
+// [FIX] Now accepts product_id
 app.post('/api/reviews', async (req, res) => {
-  const { customer_name, rating, comment } = req.body;
+  const { customer_name, rating, comment, product_id } = req.body;
   try {
     const { data, error } = await supabase
       .from('reviews')
-      .insert([{ customer_name, rating, comment, is_approved: true }])
+      .insert([{ 
+        customer_name, 
+        rating, 
+        comment, 
+        is_approved: true,
+        product_id: product_id || 1 // Default to Syndicate if missing
+      }])
       .select();
 
     if (error) throw error;
@@ -274,12 +281,17 @@ app.get('/api/gallery', async (req, res) => {
   }
 });
 
+// [FIX] Now accepts product_id
 app.post('/api/gallery', async (req, res) => {
-  const { image_url, caption } = req.body;
+  const { image_url, caption, product_id } = req.body;
   try {
     const { data, error } = await supabase
       .from('gallery')
-      .insert([{ image_url, caption }])
+      .insert([{ 
+        image_url, 
+        caption,
+        product_id: product_id || 1 // Default to Syndicate if missing
+      }])
       .select();
 
     if (error) throw error;
