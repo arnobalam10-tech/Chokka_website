@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, ArrowRight, Zap, ShieldAlert, Package, Truck, Award, Users } from 'lucide-react';
+import { ShoppingCart, ArrowRight, Zap, ShieldAlert, Package, Truck, Award, Users, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CheckoutModal from '../components/CheckoutModal';
 
@@ -69,6 +69,7 @@ export default function HomePage() {
   // 2. Filter Images
   const syndicateImages = gallery.filter(img => (img.product_id || 1) === 1);
   const tongImages = gallery.filter(img => (img.product_id || 1) === 2);
+  const bundleImages = gallery.filter(img => (img.product_id || 1) === 3); // NEW: Get Bundle Images
 
   // 3. Cycle Timers
   useEffect(() => {
@@ -215,25 +216,56 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* --- 3. BUNDLE BANNER (Moved Up) --- */}
-      <section className="bg-[#f8f5e6] border-y-4 border-[#1a3325] py-16 px-4 relative overflow-hidden">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
-            <div className="text-center md:text-left">
-                <h3 className="text-4xl md:text-6xl font-black uppercase tracking-tighter mb-2 leading-none text-[#1a3325]">
-                    Wanna get <span className="text-[#2e8b57]">both?</span>
+      {/* --- 3. BUNDLE BANNER (ENLARGED & REDESIGNED) --- */}
+      <section className="bg-[#f8f5e6] border-y-4 border-[#1a3325] py-24 px-6 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center relative z-10">
+            
+            {/* Left: Persuasive Text */}
+            <div className="text-center md:text-left space-y-6">
+                <h3 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.9] text-[#1a3325]">
+                    Wanna get <br/> <span className="text-[#2e8b57]">both?</span>
                 </h3>
-                <p className="font-bold opacity-70 text-lg md:text-xl text-[#1a3325]">
-                    Get both games and save big. Why choose one?
-                </p>
+                
+                <div className="space-y-4 text-lg font-medium opacity-80 leading-relaxed max-w-xl mx-auto md:mx-0">
+                    <p>Why settle for one kind of chaos when you can have both?</p>
+                    <p>The <strong>Chokka Bundle</strong> gives you the complete experience: The strategic backstabbing of <span className="font-bold">The Syndicate</span> and the loud, bluffing madness of <span className="font-bold">Tong</span>.</p>
+                    <ul className="flex flex-col gap-2 mt-4 text-sm font-bold uppercase tracking-wider text-[#1a3325]/70">
+                        <li className="flex items-center gap-2 justify-center md:justify-start"><CheckCircle size={16} className="text-[#2e8b57]"/> Save Money on the Combo</li>
+                        <li className="flex items-center gap-2 justify-center md:justify-start"><CheckCircle size={16} className="text-[#2e8b57]"/> Perfect for any group size</li>
+                        <li className="flex items-center gap-2 justify-center md:justify-start"><CheckCircle size={16} className="text-[#2e8b57]"/> Double the fun, double the drama</li>
+                    </ul>
+                </div>
+
+                <motion.button 
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsBundleCheckoutOpen(true)}
+                    className="bg-[#1a3325] text-[#f8f5e6] px-12 py-6 text-xl md:text-2xl font-black uppercase tracking-widest shadow-[8px_8px_0px_0px_#2e8b57] hover:shadow-none transition-all flex items-center gap-3 rounded-lg mx-auto md:mx-0 mt-8"
+                >
+                    Buy Bundle • {bundleProduct.price}৳ <ShoppingCart size={28}/>
+                </motion.button>
             </div>
-            <motion.button 
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setIsBundleCheckoutOpen(true)}
-                className="bg-[#1a3325] text-[#f8f5e6] px-10 py-5 text-xl font-black uppercase tracking-widest shadow-[6px_6px_0px_0px_#2e8b57] hover:shadow-none transition-all flex items-center gap-3 rounded-lg"
-            >
-                Buy Bundle • {bundleProduct.price}৳ <ShoppingCart size={24}/>
-            </motion.button>
+
+            {/* Right: 16:9 Cinematic Image (Fetched from Admin) */}
+            <div className="w-full aspect-video bg-gray-200 border-4 border-[#1a3325] shadow-[12px_12px_0px_0px_#1a3325] rounded-xl overflow-hidden relative group">
+                {bundleImages.length > 0 ? (
+                    <img 
+                        src={bundleImages[0].image_url} 
+                        alt="Chokka Bundle" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    />
+                ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-[#1a3325]/40 font-black uppercase tracking-widest p-8 text-center">
+                        <Package size={64} className="mb-4 opacity-50"/>
+                        <span>Upload a Bundle Image<br/>in Admin Panel (Tab 3)</span>
+                    </div>
+                )}
+                {/* Overlay Badge */}
+                <div className="absolute top-4 right-4 bg-[#e63946] text-white px-4 py-2 font-black uppercase tracking-widest text-sm border-2 border-[#1a3325] shadow-md rotate-3">
+                    Best Value
+                </div>
+            </div>
+
         </div>
       </section>
 
