@@ -25,6 +25,7 @@ app.use(express.json());
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
 // Paste this near the top, after your constants
 const sendTelegramNotification = async (orderData) => {
   const TELEGRAM_TOKEN = '8279878052:AAH6w2UeFBDUkMHGxXutA4UoYwv1yJFRIFw';
@@ -55,6 +56,7 @@ const sendTelegramNotification = async (orderData) => {
     console.error("Telegram Error:", error);
   }
 };
+
 // --- 1. ORDERS ---
 
 // Receive New Order (Checkout)
@@ -124,14 +126,13 @@ app.put('/api/orders/:id', async (req, res) => {
 
 // --- 2. PRODUCT SETTINGS (Prices & Fees) ---
 
-// Get Product Info (To show in Admin)
-app.get('/api/product', async (req, res) => {
+// Get ALL products (For Admin)
+app.get('/api/products', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .eq('id', 1)
-      .single();
+      .order('id', { ascending: true });
 
     if (error) throw error;
     res.json(data);
@@ -140,15 +141,16 @@ app.get('/api/product', async (req, res) => {
   }
 });
 
-// Update Price & Delivery Fees
-app.put('/api/product', async (req, res) => {
-  const { price, stock, delivery_dhaka, delivery_outside } = req.body;
+// Update specific product by ID
+app.put('/api/products/:id', async (req, res) => {
+  const { id } = req.params;
+  const { price, cost, stock, delivery_dhaka, delivery_outside } = req.body;
 
   try {
     const { data, error } = await supabase
       .from('products')
-      .update({ price, stock, delivery_dhaka, delivery_outside })
-      .eq('id', 1)
+      .update({ price, cost, stock, delivery_dhaka, delivery_outside })
+      .eq('id', id)
       .select();
 
     if (error) throw error;
