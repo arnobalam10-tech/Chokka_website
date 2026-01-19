@@ -293,7 +293,7 @@ export default function HomePage() {
 
       {/* --- FOOTER --- */}
       <footer className="bg-[#112218] text-[#f8f5e6] py-8 text-center text-xs font-bold uppercase tracking-widest opacity-80">
-        © 2026 Chokka Collectives BD • Designed in Dhaka
+        © 2026 Chokka Collectives BD • Designed in Chittagong
       </footer>
 
       {/* --- CHECKOUT MODAL --- */}
