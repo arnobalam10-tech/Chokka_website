@@ -206,7 +206,7 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
                       </select>
                   </div>
 
-                  <textarea required className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold h-20 resize-none placeholder:text-gray-400 focus:outline-none focus:border-[#2e8b57]" placeholder="Detailed Address (PLEASE STATE CITY eg. Dhaka/Chittagong)..." value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}/>
+                  <textarea required className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold h-20 resize-none placeholder:text-gray-400 focus:outline-none focus:border-[#2e8b57]" placeholder="Detailed Address (MUST ENTER CITY NAME eg. Dhaka/Chittagong)..." value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}/>
 
                   {/* COUPON */}
                   <div className="flex gap-2 items-center">
