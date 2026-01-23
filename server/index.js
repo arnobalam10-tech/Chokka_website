@@ -124,6 +124,25 @@ app.put('/api/orders/:id', async (req, res) => {
   }
 });
 
+// --- NEW ENDPOINT: Update Customer Details (Edit Modal) ---
+app.put('/api/orders/:id/update-details', async (req, res) => {
+  const { id } = req.params;
+  const { customer_name, customer_phone, customer_address, total_price } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .update({ customer_name, customer_phone, customer_address, total_price })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // --- 2. PRODUCT SETTINGS (Prices & Fees) ---
 
 // Get ALL products (For Admin)
@@ -411,6 +430,77 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
         res.json({ success: false, message: "Steadfast Rejected: " + JSON.stringify(result) });
     }
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- NEW ENDPOINT: SYNC ALL STATUS ---
+// Checks Steadfast for updates on all orders that are NOT yet delivered
+app.post('/api/steadfast/sync-all', async (req, res) => {
+  const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
+  const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
+  const BASE_URL = 'https://portal.packzy.com/api/v1';
+
+  try {
+    // 1. Get all active orders from DB (Filter out delivered/cancelled)
+    // We fetch orders that have a tracking_code but are NOT delivered yet
+    const { data: activeOrders, error } = await supabase
+      .from('orders')
+      .select('id, invoice_id, tracking_code, status')
+      .neq('status', 'Delivered')
+      .neq('status', 'Cancelled')
+      .not('tracking_code', 'is', null);
+
+    if (error) throw error;
+    if (!activeOrders || activeOrders.length === 0) {
+      return res.json({ success: true, updated: 0, message: "No active orders to sync." });
+    }
+
+    let updatedCount = 0;
+
+    // 2. Loop through each order and check status
+    for (const order of activeOrders) {
+      if (!order.tracking_code) continue;
+
+      const response = await fetch(`${BASE_URL}/status_by_cid/${order.tracking_code}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Api-Key': API_KEY,
+          'Secret-Key': SECRET_KEY
+        }
+      });
+      
+      const result = await response.json();
+
+      // Steadfast Status Mapping
+      // Their statuses: "delivered", "partial_delivered", "cancelled", "hold", "in_review", "pending"
+      let newStatus = order.status;
+      
+      if (result.delivery_status) {
+        const sfStatus = result.delivery_status.toLowerCase();
+        
+        if (sfStatus === 'delivered') newStatus = 'Delivered';
+        else if (sfStatus === 'cancelled') newStatus = 'Cancelled';
+        else if (sfStatus === 'partial_delivered') newStatus = 'Delivered';
+        else if (sfStatus === 'in_review') newStatus = 'Dispatched';
+        else if (sfStatus === 'pending') newStatus = 'Steadfast_Posted';
+        
+        // 3. Update DB only if status changed
+        if (newStatus !== order.status) {
+            await supabase
+              .from('orders')
+              .update({ status: newStatus })
+              .eq('id', order.id);
+            updatedCount++;
+        }
+      }
+    }
+
+    res.json({ success: true, updated: updatedCount });
+
+  } catch (error) {
+    console.error("Sync Error:", error);
     res.status(500).json({ error: error.message });
   }
 });
