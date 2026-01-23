@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3 } from 'lucide-react';
+import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3, RefreshCw, Menu, X } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
 const supabaseUrl = 'https://sqflulpuxotfkjsjqquv.supabase.co'; 
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxZmx1bHB1eG90Zmtqc2pxcXV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNTAxODEsImV4cCI6MjA4MzcyNjE4MX0.ByYhjp6lwpZxwnYI1zDUwtR6cI0ekUWWPHKRhKsDw8M'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// --- LIVE SERVER ---
+const API_URL = 'https://chokka-server.onrender.com';
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('orders'); 
@@ -23,17 +26,25 @@ export default function Admin() {
   const [uploading, setUploading] = useState(false);
   const [processingOrder, setProcessingOrder] = useState(null);
   const [isBulkSending, setIsBulkSending] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // Mobile Menu Toggle
 
   useEffect(() => {
     fetchOrders(); fetchProducts(); fetchCoupons(); fetchReviews(); fetchGallery();
   }, []);
 
   // --- API CALLS ---
-  const fetchOrders = () => fetch('https://chokka-server.onrender.com/api/orders').then(r => r.json()).then(setOrders);
-  const fetchProducts = () => fetch('https://chokka-server.onrender.com/api/products').then(r => r.json()).then(setProducts);
-  const fetchCoupons = () => fetch('https://chokka-server.onrender.com/api/coupons').then(r => r.json()).then(setCoupons);
-  const fetchReviews = () => fetch('https://chokka-server.onrender.com/api/reviews').then(r => r.json()).then(setReviews);
-  const fetchGallery = () => fetch('https://chokka-server.onrender.com/api/gallery').then(r => r.json()).then(setGallery);
+  const fetchOrders = () => fetch(`${API_URL}/api/orders`).then(r => r.json()).then(setOrders);
+  const fetchProducts = () => fetch(`${API_URL}/api/products`).then(r => r.json()).then(setProducts);
+  const fetchCoupons = () => fetch(`${API_URL}/api/coupons`).then(r => r.json()).then(setCoupons);
+  const fetchReviews = () => fetch(`${API_URL}/api/reviews`).then(r => r.json()).then(setReviews);
+  const fetchGallery = () => fetch(`${API_URL}/api/gallery`).then(r => r.json()).then(setGallery);
+
+  // --- HELPER: Unified "Pending" Logic ---
+  // Returns true if order is new/unprocessed
+  const isPending = (status) => {
+    return !status || status === '' || status === 'Pending' || status === 'PENDING' || status === 'Pickup Pending';
+  };
 
   const getStats = () => {
     const validOrders = orders.filter(o => o.status !== 'Cancelled');
@@ -72,7 +83,7 @@ export default function Admin() {
     if(!confirm(`Send Order #${order.id} to Steadfast Courier?`)) return;
     setProcessingOrder(order.id);
     try {
-        const response = await fetch('https://chokka-server.onrender.com/api/steadfast/create', {
+        const response = await fetch(`${API_URL}/api/steadfast/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -95,12 +106,12 @@ export default function Admin() {
   };
 
   const sendAllPending = async () => {
-    const pendingOrders = orders.filter(o => !o.status || o.status === 'Pending' || o.status === 'Pickup Pending');
+    const pendingOrders = orders.filter(o => isPending(o.status));
     if (pendingOrders.length === 0) return alert("No pending orders to send!");
     if (!confirm(`Are you sure you want to send ${pendingOrders.length} orders to Steadfast?`)) return;
     setIsBulkSending(true);
     try {
-        const response = await fetch('https://chokka-server.onrender.com/api/steadfast/bulk-create', {
+        const response = await fetch(`${API_URL}/api/steadfast/bulk-create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ orders: pendingOrders })
@@ -115,8 +126,30 @@ export default function Admin() {
     } catch (e) { alert("Server Error"); } finally { setIsBulkSending(false); }
   };
 
+  // --- NEW: SYNC ALL STATUS ---
+  const syncAllStatus = async () => {
+    setIsSyncing(true);
+    try {
+        // We trigger a refresh on the server for all active orders
+        // Note: This assumes you will add the /api/steadfast/sync-all endpoint to index.js later
+        const response = await fetch(`${API_URL}/api/steadfast/sync-all`, { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(`✅ Synced! ${result.updated} orders updated.`);
+            fetchOrders(); // Refresh table
+        } else {
+            alert("Sync failed or endpoint not ready yet.");
+        }
+    } catch (error) {
+        console.error("Sync Error", error);
+    } finally {
+        setIsSyncing(false);
+    }
+  };
+
   const updateOrderStatus = async (id, newStatus, trackingCode = null) => {
-    await fetch(`https://chokka-server.onrender.com/api/orders/${id}/status`, {
+    await fetch(`${API_URL}/api/orders/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, tracking_code: trackingCode })
@@ -126,21 +159,22 @@ export default function Admin() {
 
   const deleteOrder = async (id) => {
     if(!confirm("⚠️ Delete this order permanently?")) return;
-    await fetch(`https://chokka-server.onrender.com/api/orders/${id}`, { method: 'DELETE' });
+    await fetch(`${API_URL}/api/orders/${id}`, { method: 'DELETE' });
     fetchOrders();
   };
 
+  // --- FIXED: Use isPending helper for filter ---
   const getFilteredOrders = () => {
     if (orderSubTab === 'All') return orders;
-    if (orderSubTab === 'Pickup Pending') return orders.filter(o => !o.status || o.status === 'Pending' || o.status === 'Pickup Pending');
+    if (orderSubTab === 'Pickup Pending') return orders.filter(o => isPending(o.status));
     if (orderSubTab === 'Pickup Sent') return orders.filter(o => o.status === 'Steadfast_Posted');
-    if (orderSubTab === 'Dispatched') return orders.filter(o => o.status === 'Dispatched' || o.status === 'Shipped');
+    if (orderSubTab === 'Dispatched') return orders.filter(o => o.status === 'Dispatched' || o.status === 'Shipped' || o.status === 'in_review');
     if (orderSubTab === 'Delivered') return orders.filter(o => o.status === 'Delivered');
     return orders;
   };
 
   const updateProduct = async (id, updatedData) => { 
-    const res = await fetch(`https://chokka-server.onrender.com/api/products/${id}`, { 
+    const res = await fetch(`${API_URL}/api/products/${id}`, { 
         method: 'PUT', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify(updatedData) 
@@ -148,13 +182,13 @@ export default function Admin() {
     if(res.ok) fetchProducts(); 
   };
   
-  const createCoupon = async (e) => { e.preventDefault(); await fetch('https://chokka-server.onrender.com/api/coupons', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
+  const createCoupon = async (e) => { e.preventDefault(); await fetch(`${API_URL}/api/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
   const updateCoupon = async (id, updatedData) => { const { error } = await supabase.from('coupons').update(updatedData).eq('id', id); if (!error) { fetchCoupons(); } else { alert("Error updating coupon"); } };
   const deleteCoupon = async (id) => { if(!confirm("Delete this coupon?")) return; const { error } = await supabase.from('coupons').delete().eq('id', id); if (!error) { fetchCoupons(); } else { alert("Error deleting coupon"); } };
   
   const createReview = async (e) => { 
     e.preventDefault(); 
-    await fetch('https://chokka-server.onrender.com/api/reviews', { 
+    await fetch(`${API_URL}/api/reviews`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify({ 
@@ -167,34 +201,54 @@ export default function Admin() {
     e.target.reset(); fetchReviews(); 
   };
 
-  const deleteReview = async (id) => { if(!confirm("Delete?")) return; await fetch(`https://chokka-server.onrender.com/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
-  const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`https://chokka-server.onrender.com/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
+  const deleteReview = async (id) => { if(!confirm("Delete?")) return; await fetch(`${API_URL}/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
+  const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`${API_URL}/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
   
   const handleUploadAndSave = async (e) => {
     e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true);
     try {
         const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error;
         const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
-        await fetch('https://chokka-server.onrender.com/api/gallery', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) });
+        await fetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) });
         alert("✅ Upload Successful!"); e.target.reset(); fetchGallery();
     } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex font-mono text-chokka-dark">
-      <div className="w-64 bg-chokka-dark text-white p-6 flex flex-col gap-6 fixed h-full z-10 overflow-y-auto">
-        <h1 className="text-2xl font-bold tracking-widest border-b border-gray-600 pb-4">ADMIN</h1>
+    <div className="min-h-screen bg-gray-100 flex font-mono text-chokka-dark relative">
+      
+      {/* --- MOBILE TOGGLE BUTTON --- */}
+      <div className="md:hidden fixed top-0 left-0 w-full bg-chokka-dark text-white p-4 z-20 flex justify-between items-center shadow-md">
+        <h1 className="text-xl font-bold tracking-widest">ADMIN PANEL</h1>
+        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}
+        </button>
+      </div>
+
+      {/* --- SIDEBAR (Responsive) --- */}
+      {/* Logic: Hidden on mobile by default, Slides in when open. Always visible on Desktop. */}
+      <div className={`
+        bg-chokka-dark text-white p-6 flex flex-col gap-6 fixed h-full z-30 transition-transform duration-300 w-64
+        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
+        md:translate-x-0 top-0 left-0 pt-20 md:pt-6
+      `}>
+        <h1 className="text-2xl font-bold tracking-widest border-b border-gray-600 pb-4 hidden md:block">ADMIN</h1>
         <nav className="flex flex-col gap-2">
-            <button onClick={() => setActiveTab('analytics')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-chokka-green text-chokka-dark' : ''}`}><BarChart3 size={20}/> ANALYTICS</button>
-            <button onClick={() => setActiveTab('orders')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'orders' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Package size={20}/> ORDERS</button>
-            <button onClick={() => setActiveTab('products')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'products' ? 'bg-chokka-green text-chokka-dark' : ''}`}><DollarSign size={20}/> GAME SETTINGS</button>
-            <button onClick={() => setActiveTab('coupons')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'coupons' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Tag size={20}/> COUPONS</button>
-            <button onClick={() => setActiveTab('reviews')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'reviews' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Star size={20}/> REVIEWS</button>
-            <button onClick={() => setActiveTab('visuals')} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'visuals' ? 'bg-chokka-green text-chokka-dark' : ''}`}><ImageIcon size={20}/> VISUALS</button>
+            <button onClick={() => {setActiveTab('analytics'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-chokka-green text-chokka-dark' : ''}`}><BarChart3 size={20}/> ANALYTICS</button>
+            <button onClick={() => {setActiveTab('orders'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'orders' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Package size={20}/> ORDERS</button>
+            <button onClick={() => {setActiveTab('products'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'products' ? 'bg-chokka-green text-chokka-dark' : ''}`}><DollarSign size={20}/> GAME SETTINGS</button>
+            <button onClick={() => {setActiveTab('coupons'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'coupons' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Tag size={20}/> COUPONS</button>
+            <button onClick={() => {setActiveTab('reviews'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'reviews' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Star size={20}/> REVIEWS</button>
+            <button onClick={() => {setActiveTab('visuals'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'visuals' ? 'bg-chokka-green text-chokka-dark' : ''}`}><ImageIcon size={20}/> VISUALS</button>
         </nav>
       </div>
 
-      <div className="ml-64 p-10 w-full">
+      {/* --- MAIN CONTENT (Responsive Margin) --- */}
+      <div className="w-full md:ml-64 p-4 md:p-10 mt-16 md:mt-0">
+        
+        {/* --- OVERLAY FOR MOBILE --- */}
+        {mobileMenuOpen && <div onClick={() => setMobileMenuOpen(false)} className="fixed inset-0 bg-black/50 z-20 md:hidden"></div>}
+
         {activeTab === 'analytics' && (
             <div>
                 <h2 className="text-3xl font-bold mb-8">SALES SUMMARY</h2>
@@ -227,11 +281,17 @@ export default function Admin() {
 
         {activeTab === 'orders' && (
             <div>
-                <div className="flex justify-between items-end mb-6">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
                     <h2 className="text-3xl font-bold">ORDER MANAGEMENT</h2>
-                    <button onClick={sendAllPending} disabled={isBulkSending} className="bg-green-600 text-white px-6 py-3 font-bold shadow-lg hover:bg-green-700 flex items-center gap-2 border-2 border-black transition-transform active:scale-95 disabled:opacity-50">
-                        {isBulkSending ? 'SENDING...' : <><Send size={20}/> SEND ALL PENDING TO STEADFAST</>}
-                    </button>
+                    <div className="flex gap-2 flex-wrap">
+                        {/* --- SYNC BUTTON --- */}
+                        <button onClick={syncAllStatus} disabled={isSyncing} className="bg-blue-600 text-white px-4 py-3 font-bold shadow-lg hover:bg-blue-700 flex items-center gap-2 border-2 border-black transition-transform active:scale-95 disabled:opacity-50 text-xs md:text-sm">
+                            <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""}/> {isSyncing ? 'SYNCING...' : 'CHECK DELIVERY STATUS'}
+                        </button>
+                        <button onClick={sendAllPending} disabled={isBulkSending} className="bg-green-600 text-white px-4 py-3 font-bold shadow-lg hover:bg-green-700 flex items-center gap-2 border-2 border-black transition-transform active:scale-95 disabled:opacity-50 text-xs md:text-sm">
+                            {isBulkSending ? 'SENDING...' : <><Send size={18}/> SEND PENDING TO STEADFAST</>}
+                        </button>
+                    </div>
                 </div>
                 <div className="flex gap-2 mb-6 border-b-2 border-gray-300 pb-2 overflow-x-auto">
                     {['All', 'Pickup Pending', 'Pickup Sent', 'Dispatched', 'Delivered'].map(tab => (
@@ -239,7 +299,7 @@ export default function Admin() {
                     ))}
                 </div>
                 <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[800px]">
                         <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
                             <tr><th className="p-4">ID</th><th className="p-4">Game</th><th className="p-4">Customer</th><th className="p-4">Amount</th><th className="p-4">Status</th><th className="p-4">Steadfast</th><th className="p-4">Manual</th><th className="p-4">Delete</th></tr>
                         </thead>
@@ -258,7 +318,7 @@ export default function Admin() {
                                         <td className="p-4 font-bold text-lg">{o.total_price}৳</td>
                                         <td className="p-4">
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide
-                                                ${!o.status || o.status === 'Pending' || o.status === 'Pickup Pending' ? 'bg-yellow-200 text-yellow-800' : ''}
+                                                ${isPending(o.status) ? 'bg-yellow-200 text-yellow-800' : ''}
                                                 ${o.status === 'Steadfast_Posted' ? 'bg-blue-200 text-blue-800' : ''}
                                                 ${o.status === 'Dispatched' ? 'bg-purple-200 text-purple-800' : ''}
                                                 ${o.status === 'Delivered' ? 'bg-green-200 text-green-800' : ''}
@@ -268,7 +328,8 @@ export default function Admin() {
                                             {o.tracking_code && <div className="text-[10px] font-mono mt-1 text-gray-400">Track: {o.tracking_code}</div>}
                                         </td>
                                         <td className="p-4">
-                                            {(!o.status || o.status === 'Pending' || o.status === 'Pickup Pending') ? (
+                                            {/* --- FIXED: Robust Check for Pending Status --- */}
+                                            {isPending(o.status) ? (
                                                 <button onClick={() => sendToSteadfast(o)} disabled={processingOrder === o.id} className="bg-green-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-green-700 flex items-center gap-1.5 rounded shadow disabled:opacity-50">
                                                     {processingOrder === o.id ? '...' : <><Send size={14}/> Send</>}
                                                 </button>
@@ -277,6 +338,7 @@ export default function Admin() {
                                         <td className="p-4">
                                             <select className="border-2 border-gray-300 p-1 text-[10px] font-bold rounded" value={o.status || 'Pending'} onChange={(e) => updateOrderStatus(o.id, e.target.value)}>
                                                 <option value="Pickup Pending">Pickup Pending</option>
+                                                <option value="Steadfast_Posted" disabled>Pickup Sent</option>
                                                 <option value="Dispatched">Dispatched</option>
                                                 <option value="Delivered">Delivered</option>
                                                 <option value="Cancelled">Cancelled</option>
@@ -294,12 +356,13 @@ export default function Admin() {
             </div>
         )}
 
+        {/* --- PRODUCTS TAB (Mobile Responsive Grid) --- */}
         {activeTab === 'products' && (
             <div>
                 <h2 className="text-3xl font-bold mb-6 uppercase tracking-tight">Game Settings</h2>
                 <div className="grid grid-cols-1 gap-4 max-w-4xl">
                   {products.length > 0 ? products.map(p => (
-                    <div key={p.id} className="bg-white p-6 shadow-lg border-2 border-black flex flex-col md:flex-row gap-6 items-center">
+                    <div key={p.id} className="bg-white p-6 shadow-lg border-2 border-black flex flex-col gap-6">
                       <div className="flex-1">
                         <h3 className="text-xl font-black text-chokka-dark uppercase">{p.title}</h3>
                         <p className="text-xs font-bold text-gray-400">DATABASE ID: {p.id}</p>
@@ -322,7 +385,7 @@ export default function Admin() {
                           <input type="number" className="w-20 p-2 border-2 border-gray-100 font-bold focus:border-black outline-none" defaultValue={p.delivery_outside} onBlur={(e) => updateProduct(p.id, { delivery_outside: Number(e.target.value) })} />
                         </div>
                       </div>
-                      <div className="bg-chokka-green p-3 border-l-4 border-chokka-dark min-w-[120px]">
+                      <div className="bg-chokka-green p-3 border-l-4 border-chokka-dark">
                         <span className="text-[10px] font-black block leading-tight">PROFIT/BOX</span>
                         <span className="text-xl font-black tracking-tighter">+{p.price - p.cost}৳</span>
                       </div>
@@ -339,13 +402,13 @@ export default function Admin() {
         {activeTab === 'coupons' && (
             <div className="max-w-4xl">
                 <h2 className="text-3xl font-bold mb-6">COUPON MANAGER</h2>
-                <form onSubmit={createCoupon} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex gap-4 items-end flex-wrap">
-                    <div><label className="font-bold block text-sm mb-1">Coupon Code</label><input name="code" required type="text" placeholder="e.g. SUMMER20" className="border-2 border-gray-300 p-2 font-bold uppercase w-48"/></div>
-                    <div><label className="font-bold block text-sm mb-1">Discount (Tk)</label><input name="discount" required type="number" placeholder="50" className="border-2 border-gray-300 p-2 font-bold w-32"/></div>
-                    <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2"><Plus size={18}/> CREATE</button>
+                <form onSubmit={createCoupon} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-col md:flex-row gap-4 items-end flex-wrap">
+                    <div><label className="font-bold block text-sm mb-1">Coupon Code</label><input name="code" required type="text" placeholder="e.g. SUMMER20" className="border-2 border-gray-300 p-2 font-bold uppercase w-full md:w-48"/></div>
+                    <div><label className="font-bold block text-sm mb-1">Discount (Tk)</label><input name="discount" required type="number" placeholder="50" className="border-2 border-gray-300 p-2 font-bold w-full md:w-32"/></div>
+                    <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2 w-full md:w-auto justify-center"><Plus size={18}/> CREATE</button>
                 </form>
-                <div className="bg-white shadow-lg border-2 border-black">
-                  <table className="w-full text-left">
+                <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
+                  <table className="w-full text-left min-w-[500px]">
                     <thead className="bg-gray-200 border-b-2 border-black">
                       <tr><th className="p-3">Code</th><th className="p-3">Discount</th><th className="p-3">Actions</th></tr>
                     </thead>
@@ -375,18 +438,18 @@ export default function Admin() {
         {activeTab === 'reviews' && (
             <div className="max-w-4xl">
                  <h2 className="text-3xl font-bold mb-6 text-chokka-dark uppercase tracking-tight">Customer Reviews</h2>
-                 <div className="flex gap-4 mb-6">
-                    <button onClick={() => setContentSubTab(1)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
-                    <button onClick={() => setContentSubTab(2)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
-                    <button onClick={() => setContentSubTab(3)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
+                 <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                    <button onClick={() => setContentSubTab(1)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
+                    <button onClick={() => setContentSubTab(2)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
+                    <button onClick={() => setContentSubTab(3)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
                  </div>
 
                  <form onSubmit={createReview} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex gap-4 items-end flex-wrap">
-                    <div><label className="font-bold block text-sm mb-1">Name</label><input name="name" required type="text" placeholder="Sakib" className="border-2 border-gray-300 p-2 font-bold w-48"/></div>
-                    <div><label className="font-bold block text-sm mb-1">Rating</label><select name="rating" className="border-2 border-gray-300 p-2 font-bold w-24"><option value="5">5 ★</option><option value="4">4 ★</option></select></div>
+                    <div className="w-full md:w-auto"><label className="font-bold block text-sm mb-1">Name</label><input name="name" required type="text" placeholder="Sakib" className="border-2 border-gray-300 p-2 font-bold w-full md:w-48"/></div>
+                    <div className="w-full md:w-auto"><label className="font-bold block text-sm mb-1">Rating</label><select name="rating" className="border-2 border-gray-300 p-2 font-bold w-full md:w-24"><option value="5">5 ★</option><option value="4">4 ★</option></select></div>
                     <div className="w-full"><label className="font-bold block text-sm mb-1">Comment</label><textarea name="comment" required placeholder="Comment..." className="border-2 border-gray-300 p-2 font-bold w-full h-20 resize-none"/></div>
-                    <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2">
-                        <Plus size={18}/> POST FOR {contentSubTab === 1 ? 'SYNDICATE' : contentSubTab === 2 ? 'TONG' : 'BUNDLE'}
+                    <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2 w-full md:w-auto justify-center">
+                        <Plus size={18}/> POST REVIEW
                     </button>
                  </form>
 
@@ -407,17 +470,17 @@ export default function Admin() {
         {activeTab === 'visuals' && (
             <div className="max-w-5xl">
                 <h2 className="text-3xl font-bold mb-6 text-chokka-dark uppercase tracking-tight">Product Visuals</h2>
-                <div className="flex gap-4 mb-6">
-                    <button onClick={() => setContentSubTab(1)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
-                    <button onClick={() => setContentSubTab(2)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
-                    <button onClick={() => setContentSubTab(3)} className={`px-6 py-2 font-bold border-2 border-black transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
+                <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                    <button onClick={() => setContentSubTab(1)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
+                    <button onClick={() => setContentSubTab(2)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
+                    <button onClick={() => setContentSubTab(3)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
                 </div>
 
                 <form onSubmit={handleUploadAndSave} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-col md:flex-row gap-4 items-end bg-green-50">
                     <div className="w-full"><label className="font-bold block text-sm mb-1">Select Photo</label><input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold w-full bg-white"/></div>
-                    <div><label className="font-bold block text-sm mb-1">Caption</label><input name="caption" type="text" placeholder="Detail Shot" className="border-2 border-black p-2 font-bold w-48"/></div>
-                    <button disabled={uploading} className="bg-black text-white px-6 py-2.5 font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50 min-w-[140px]">
-                        {uploading ? 'UPLOADING...' : <><Upload size={18}/> UPLOAD TO {contentSubTab === 1 ? 'SYNDICATE' : contentSubTab === 2 ? 'TONG' : 'BUNDLE'}</>}
+                    <div className="w-full md:w-auto"><label className="font-bold block text-sm mb-1">Caption</label><input name="caption" type="text" placeholder="Detail Shot" className="border-2 border-black p-2 font-bold w-full md:w-48"/></div>
+                    <button disabled={uploading} className="bg-black text-white px-6 py-2.5 font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50 min-w-[140px] w-full md:w-auto justify-center">
+                        {uploading ? 'UPLOADING...' : <><Upload size={18}/> UPLOAD</>}
                     </button>
                 </form>
 
