@@ -421,9 +421,10 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     const result = await response.json();
     if (result.status === 200 || Array.isArray(result)) {
         const ids = orders.map(o => o.id);
+        // Default to 'Unassigned' because Steadfast puts bulk orders in 'in_review'
         await supabase
           .from('orders')
-          .update({ status: 'Steadfast_Posted' })
+          .update({ status: 'Unassigned' }) 
           .in('id', ids);
         res.json({ success: true, count: orders.length, details: result });
     } else {
@@ -434,8 +435,7 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
   }
 });
 
-// --- NEW ENDPOINT: SYNC ALL STATUS ---
-// Checks Steadfast for updates on all orders that are NOT yet delivered
+// --- NEW ENDPOINT: SYNC ALL STATUS (UPDATED WITH REAL MAPPING) ---
 app.post('/api/steadfast/sync-all', async (req, res) => {
   const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
   const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
@@ -443,7 +443,6 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
 
   try {
     // 1. Get all active orders from DB (Filter out delivered/cancelled)
-    // We fetch orders that have a tracking_code but are NOT delivered yet
     const { data: activeOrders, error } = await supabase
       .from('orders')
       .select('id, invoice_id, tracking_code, status')
@@ -473,18 +472,23 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
       
       const result = await response.json();
 
-      // Steadfast Status Mapping
-      // Their statuses: "delivered", "partial_delivered", "cancelled", "hold", "in_review", "pending"
-      let newStatus = order.status;
-      
       if (result.delivery_status) {
         const sfStatus = result.delivery_status.toLowerCase();
-        
-        if (sfStatus === 'delivered') newStatus = 'Delivered';
+        let newStatus = order.status;
+
+        // --- MAP STEADFAST STATUSES TO INTERNAL STATUSES ---
+        if (sfStatus === 'in_review') newStatus = 'Unassigned';
+        else if (sfStatus === 'pending') newStatus = 'Assigned';
+        else if (sfStatus === 'delivered') newStatus = 'Delivered';
+        else if (sfStatus === 'partial_delivered') newStatus = 'Partial Delivered';
         else if (sfStatus === 'cancelled') newStatus = 'Cancelled';
-        else if (sfStatus === 'partial_delivered') newStatus = 'Delivered';
-        else if (sfStatus === 'in_review') newStatus = 'Dispatched';
-        else if (sfStatus === 'pending') newStatus = 'Steadfast_Posted';
+        else if (sfStatus === 'hold') newStatus = 'Hold';
+        
+        // Detailed Approval Statuses
+        else if (sfStatus === 'delivered_approval_pending') newStatus = 'Delivered (Pending Approval)';
+        else if (sfStatus === 'partial_delivered_approval_pending') newStatus = 'Partial (Pending Approval)';
+        else if (sfStatus === 'cancelled_approval_pending') newStatus = 'Cancelled (Pending Approval)';
+        else if (sfStatus === 'unknown_approval_pending') newStatus = 'Unknown (Pending Approval)';
         
         // 3. Update DB only if status changed
         if (newStatus !== order.status) {

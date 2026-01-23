@@ -105,7 +105,8 @@ export default function Admin() {
         const result = await response.json();
         if (result.status === 200) {
             alert(`✅ Sent! Tracking: ${result.consignment.tracking_code}`);
-            await updateOrderStatus(order.id, 'Steadfast_Posted', result.consignment.tracking_code);
+            // Optimistically update to 'Unassigned' to match Steadfast's initial state
+            await updateOrderStatus(order.id, 'Unassigned', result.consignment.tracking_code);
         } else {
             alert(`❌ Steadfast Error: ${JSON.stringify(result)}`);
         }
@@ -197,12 +198,16 @@ export default function Admin() {
     } catch (error) { alert("Server error while updating."); }
   };
 
+  // --- UPDATED: FILTER LOGIC FOR NEW STATUSES ---
   const getFilteredOrders = () => {
     if (orderSubTab === 'All') return orders;
     if (orderSubTab === 'Pickup Pending') return orders.filter(o => isPending(o.status));
-    if (orderSubTab === 'Pickup Sent') return orders.filter(o => o.status === 'Steadfast_Posted');
-    if (orderSubTab === 'Dispatched') return orders.filter(o => o.status === 'Dispatched' || o.status === 'Shipped' || o.status === 'in_review');
-    if (orderSubTab === 'Delivered') return orders.filter(o => o.status === 'Delivered');
+    if (orderSubTab === 'Unassigned') return orders.filter(o => o.status === 'Unassigned' || o.status === 'Steadfast_Posted');
+    if (orderSubTab === 'Assigned') return orders.filter(o => o.status === 'Assigned');
+    if (orderSubTab === 'Hold') return orders.filter(o => o.status === 'Hold');
+    if (orderSubTab === 'Dispatched') return orders.filter(o => o.status === 'Dispatched' || o.status === 'Shipped');
+    if (orderSubTab === 'Delivered') return orders.filter(o => o.status && o.status.includes('Delivered'));
+    if (orderSubTab === 'Cancelled') return orders.filter(o => o.status && o.status.includes('Cancelled'));
     return orders;
   };
 
@@ -290,8 +295,9 @@ export default function Admin() {
                         </button>
                     </div>
                 </div>
+                {/* --- UPDATED: NEW TABS FOR STEADFAST STATUSES --- */}
                 <div className="flex gap-2 mb-6 border-b-2 border-gray-300 pb-2 overflow-x-auto">
-                    {['All', 'Pickup Pending', 'Pickup Sent', 'Dispatched', 'Delivered'].map(tab => (
+                    {['All', 'Pickup Pending', 'Unassigned', 'Assigned', 'Dispatched', 'Hold', 'Delivered', 'Cancelled'].map(tab => (
                         <button key={tab} onClick={() => setOrderSubTab(tab)} className={`px-4 py-2 font-bold whitespace-nowrap rounded-t-lg transition-colors ${orderSubTab === tab ? 'bg-chokka-dark text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{tab}</button>
                     ))}
                 </div>
@@ -311,17 +317,19 @@ export default function Admin() {
                                         <td className="p-4">
                                             <div className="font-bold">{o.customer_name}</div>
                                             <div className="text-xs text-gray-500">{o.customer_phone}</div>
-                                            {/* --- UPDATED: ADDRESS SHOWN --- */}
                                             <div className="text-[10px] text-gray-400 mt-1 leading-tight max-w-[150px]">{o.customer_address}</div>
                                         </td>
                                         <td className="p-4 font-bold text-lg">{o.total_price}৳</td>
                                         <td className="p-4">
+                                            {/* --- UPDATED: NEW BADGE COLORS --- */}
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide
                                                 ${isPending(o.status) ? 'bg-yellow-200 text-yellow-800' : ''}
-                                                ${o.status === 'Steadfast_Posted' ? 'bg-blue-200 text-blue-800' : ''}
+                                                ${o.status === 'Unassigned' || o.status === 'Steadfast_Posted' ? 'bg-yellow-100 text-yellow-800' : ''}
+                                                ${o.status === 'Assigned' ? 'bg-blue-200 text-blue-800' : ''}
+                                                ${o.status === 'Hold' ? 'bg-orange-200 text-orange-900' : ''}
                                                 ${o.status === 'Dispatched' ? 'bg-purple-200 text-purple-800' : ''}
-                                                ${o.status === 'Delivered' ? 'bg-green-200 text-green-800' : ''}
-                                                ${o.status === 'Cancelled' ? 'bg-red-200 text-red-800' : ''}`}>
+                                                ${o.status && o.status.includes('Delivered') ? 'bg-green-200 text-green-800' : ''}
+                                                ${o.status && o.status.includes('Cancelled') ? 'bg-red-200 text-red-800' : ''}`}>
                                                 {o.status || 'Pending'}
                                             </span>
                                             {o.tracking_code && <div className="text-[10px] font-mono mt-1 text-gray-400">Track: {o.tracking_code}</div>}
@@ -331,19 +339,20 @@ export default function Admin() {
                                                 <button onClick={() => sendToSteadfast(o)} disabled={processingOrder === o.id} className="bg-green-600 text-white px-3 py-1.5 text-xs font-bold hover:bg-green-700 flex items-center gap-1.5 rounded shadow disabled:opacity-50">
                                                     {processingOrder === o.id ? '...' : <><Send size={14}/> Send</>}
                                                 </button>
-                                            ) : ( o.status === 'Steadfast_Posted' && <span className="text-blue-600 font-bold text-[10px] flex items-center gap-1"><CheckCircle size={12}/> Posted</span> )}
+                                            ) : ( (o.status === 'Unassigned' || o.status === 'Steadfast_Posted' || o.status === 'Assigned') && <span className="text-blue-600 font-bold text-[10px] flex items-center gap-1"><CheckCircle size={12}/> Posted</span> )}
                                         </td>
                                         <td className="p-4">
                                             <select className="border-2 border-gray-300 p-1 text-[10px] font-bold rounded" value={o.status || 'Pending'} onChange={(e) => updateOrderStatus(o.id, e.target.value)}>
                                                 <option value="Pickup Pending">Pickup Pending</option>
-                                                <option value="Steadfast_Posted" disabled>Pickup Sent</option>
+                                                <option value="Unassigned">Unassigned</option>
+                                                <option value="Assigned">Assigned</option>
                                                 <option value="Dispatched">Dispatched</option>
+                                                <option value="Hold">Hold</option>
                                                 <option value="Delivered">Delivered</option>
                                                 <option value="Cancelled">Cancelled</option>
                                             </select>
                                         </td>
                                         <td className="p-4 flex gap-2">
-                                            {/* --- UPDATED: EDIT & DELETE --- */}
                                             <button onClick={() => openEditModal(o)} className="text-blue-500 hover:bg-blue-100 p-2 rounded transition-colors"><Edit3 size={20}/></button>
                                             <button onClick={() => deleteOrder(o.id)} className="text-red-500 hover:bg-red-100 p-2 rounded transition-colors"><Trash2 size={20} /></button>
                                         </td>
