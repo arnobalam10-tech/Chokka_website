@@ -347,8 +347,8 @@ app.delete('/api/gallery/:id', async (req, res) => {
 // --- STEADFAST COURIER INTEGRATION ---
 app.post('/api/steadfast/create', async (req, res) => {
   const { invoice, name, address, phone, amount, note } = req.body;
-  const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
-  const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
+  const API_KEY = process.env.STEADFAST_API_KEY;
+  const SECRET_KEY = process.env.STEADFAST_SECRET_KEY;
   const BASE_URL = 'https://portal.packzy.com/api/v1';
 
   try {
@@ -406,8 +406,8 @@ app.delete('/api/orders/:id', async (req, res) => {
 
 app.post('/api/steadfast/bulk-create', async (req, res) => {
   const { orders } = req.body;
-  const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
-  const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
+  const API_KEY = process.env.STEADFAST_API_KEY;
+  const SECRET_KEY = process.env.STEADFAST_SECRET_KEY;
   const BASE_URL = 'https://portal.packzy.com/api/v1';
 
   const bulkArray = orders.map(o => ({
@@ -450,8 +450,8 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
 
 // --- NEW ENDPOINT: SYNC ALL STATUS (UPDATED WITH REAL MAPPING) ---
 app.post('/api/steadfast/sync-all', async (req, res) => {
-  const API_KEY = 'w4aihx8gaakviwpxyuwcli49gdkx2fzq'; 
-  const SECRET_KEY = '0lmrgricaoo2ghemqacnrt54';
+  const API_KEY = process.env.STEADFAST_API_KEY;
+  const SECRET_KEY = process.env.STEADFAST_SECRET_KEY;
   const BASE_URL = 'https://portal.packzy.com/api/v1';
 
   try {
