@@ -29,31 +29,44 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Paste this near the top, after your constants
 const sendTelegramNotification = async (orderData) => {
   const TELEGRAM_TOKEN = '8279878052:AAH6w2UeFBDUkMHGxXutA4UoYwv1yJFRIFw';
-  const CHAT_ID = '5865440292';
+  
+  // --- UPDATED: LIST OF ADMIN IDS ---
+  const CHAT_IDS = [
+    '5865440292', // You
+    '5043710380'  // Jafar Wasi
+  ];
+
+  // --- UPDATED: PRODUCT NAME MAPPING ---
+  const productNames = {
+    1: "The Syndicate",
+    2: "TONG",
+    3: "Chokka Bundle"
+  };
+  const gameTitle = productNames[orderData.product_id] || "Unknown Item";
   
   const message = `💰 *NEW ORDER RECEIVED!* 💰\n\n` +
+                  `📦 *Item:* ${gameTitle}\n` + // Added Product Name here
                   `👤 *Name:* ${orderData.customer_name}\n` +
                   `📞 *Phone:* ${orderData.customer_phone}\n` +
                   `🏙️ *City:* ${orderData.city}\n` +
                   `💵 *Total:* ${orderData.total_price} BDT\n\n` +
                   `👉 [Open Admin Panel](https://chokka.shop/admin)`;
 
-  try {
-    // Using global fetch (available in Node 18+)
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: CHAT_ID,
-        text: message,
-        parse_mode: 'Markdown'
-      })
-    });
-    
-    const result = await response.json();
-    console.log("Telegram API Response:", result);
-  } catch (error) {
-    console.error("Telegram Error:", error);
+  // Loop through all IDs and send the message to everyone
+  for (const chatId of CHAT_IDS) {
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: 'Markdown'
+        })
+      });
+    } catch (error) {
+      console.error(`Telegram Error for ID ${chatId}:`, error);
+    }
   }
 };
 
