@@ -498,36 +498,45 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
   const SECRET_KEY = process.env.STEADFAST_SECRET_KEY;
   const BASE_URL = 'https://portal.packzy.com/api/v1';
 
+  // Debug: Check if API keys exist
+  if (!API_KEY || !SECRET_KEY) {
+    return res.status(500).json({ success: false, error: "Missing Steadfast API credentials" });
+  }
+
   try {
-    // 1. Get all active orders from DB (Filter out delivered/cancelled)
+    // 1. Get all orders with tracking codes from DB
     const { data: activeOrders, error } = await supabase
       .from('orders')
-      .select('id, invoice_id, tracking_code, status')
+      .select('id, tracking_code, status')
       .not('tracking_code', 'is', null);
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase Error:", error);
+      return res.status(500).json({ success: false, error: "Database error: " + error.message });
+    }
 
-    // Filter out delivered/cancelled orders in JS (more reliable)
-    const ordersToSync = activeOrders?.filter(o =>
+    // Filter out delivered/cancelled orders in JS
+    const ordersToSync = (activeOrders || []).filter(o =>
+      o.tracking_code &&
       o.status !== 'Delivered' &&
       o.status !== 'Cancelled' &&
       !o.status?.includes('Delivered') &&
       !o.status?.includes('Cancelled')
-    ) || [];
-    if (!ordersToSync || ordersToSync.length === 0) {
+    );
+
+    if (ordersToSync.length === 0) {
       return res.json({ success: true, updated: 0, message: "No active orders to sync." });
     }
 
     let updatedCount = 0;
     const errors = [];
+    const results = [];
 
     // 2. Loop through each order and check status
     for (const order of ordersToSync) {
-      if (!order.tracking_code) continue;
-
       try {
-        // FIXED: Use status_by_trackingcode instead of status_by_cid
-        const response = await fetch(`${BASE_URL}/status_by_trackingcode/${order.tracking_code}`, {
+        const url = `${BASE_URL}/status_by_trackingcode/${order.tracking_code}`;
+        const response = await fetch(url, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -537,9 +546,16 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
         });
 
         const result = await response.json();
+        results.push({ orderId: order.id, tracking: order.tracking_code, response: result });
 
-        if (result.status === 200 && result.delivery_status) {
-          const sfStatus = result.delivery_status.toLowerCase();
+        // Handle different API response structures
+        // Packzy/Steadfast may return delivery_status directly or nested in consignment
+        let deliveryStatus = result.delivery_status ||
+                             (result.consignment && result.consignment.delivery_status) ||
+                             (result.data && result.data.delivery_status);
+
+        if ((result.status === 200 || result.status === 'success') && deliveryStatus) {
+          const sfStatus = deliveryStatus.toLowerCase();
           let newStatus = order.status;
 
           // --- MAP STEADFAST STATUSES TO INTERNAL STATUSES ---
@@ -549,14 +565,12 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
           else if (sfStatus === 'partial_delivered') newStatus = 'Partial Delivered';
           else if (sfStatus === 'cancelled') newStatus = 'Cancelled';
           else if (sfStatus === 'hold') newStatus = 'Hold';
-
-          // Detailed Approval Statuses
           else if (sfStatus === 'delivered_approval_pending') newStatus = 'Delivered (Pending Approval)';
           else if (sfStatus === 'partial_delivered_approval_pending') newStatus = 'Partial (Pending Approval)';
           else if (sfStatus === 'cancelled_approval_pending') newStatus = 'Cancelled (Pending Approval)';
           else if (sfStatus === 'unknown_approval_pending') newStatus = 'Unknown (Pending Approval)';
 
-          // 3. Update DB only if status changed
+          // Update DB only if status changed
           if (newStatus !== order.status) {
             await supabase
               .from('orders')
@@ -566,15 +580,21 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
           }
         }
       } catch (orderError) {
-        errors.push({ orderId: order.id, error: orderError.message });
+        errors.push({ orderId: order.id, tracking: order.tracking_code, error: orderError.message });
       }
     }
 
-    res.json({ success: true, updated: updatedCount, total: ordersToSync.length, errors: errors.length > 0 ? errors : undefined });
+    res.json({
+      success: true,
+      updated: updatedCount,
+      total: ordersToSync.length,
+      errors: errors.length > 0 ? errors : undefined,
+      debug: results.slice(0, 3) // Show first 3 results for debugging
+    });
 
   } catch (error) {
     console.error("Sync Error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message, stack: error.stack });
   }
 });
 
