@@ -503,11 +503,18 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
     const { data: activeOrders, error } = await supabase
       .from('orders')
       .select('id, invoice_id, tracking_code, status')
-      .not('status', 'in', '("Delivered","Cancelled")')
       .not('tracking_code', 'is', null);
 
     if (error) throw error;
-    if (!activeOrders || activeOrders.length === 0) {
+
+    // Filter out delivered/cancelled orders in JS (more reliable)
+    const ordersToSync = activeOrders?.filter(o =>
+      o.status !== 'Delivered' &&
+      o.status !== 'Cancelled' &&
+      !o.status?.includes('Delivered') &&
+      !o.status?.includes('Cancelled')
+    ) || [];
+    if (!ordersToSync || ordersToSync.length === 0) {
       return res.json({ success: true, updated: 0, message: "No active orders to sync." });
     }
 
@@ -515,7 +522,7 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
     const errors = [];
 
     // 2. Loop through each order and check status
-    for (const order of activeOrders) {
+    for (const order of ordersToSync) {
       if (!order.tracking_code) continue;
 
       try {
@@ -563,7 +570,7 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
       }
     }
 
-    res.json({ success: true, updated: updatedCount, total: activeOrders.length, errors: errors.length > 0 ? errors : undefined });
+    res.json({ success: true, updated: updatedCount, total: ordersToSync.length, errors: errors.length > 0 ? errors : undefined });
 
   } catch (error) {
     console.error("Sync Error:", error);
@@ -874,27 +881,27 @@ app.get('/api/dashboard/summary', async (req, res) => {
       .eq('status', 'Delivered')
       .gte('created_at', today);
 
-    // Get low stock items
-    const { data: inventory } = await supabase
-      .from('inventory')
-      .select('*');
+    // Get low stock items (with error handling for missing table)
+    let lowStock = [];
+    try {
+      const { data: inventory } = await supabase.from('inventory').select('*');
+      lowStock = inventory ? inventory.filter(item => item.stock <= item.reorder_level) : [];
+    } catch (e) { /* inventory table may not exist yet */ }
 
-    const lowStock = inventory ? inventory.filter(item => item.stock <= item.reorder_level) : [];
+    // Get total expenses (with error handling for missing table)
+    let totalExpenses = 0;
+    try {
+      const { data: expenses } = await supabase.from('expenses').select('print_cost, cutting_cost, packaging_cost, miscellaneous');
+      totalExpenses = expenses ? expenses.reduce((sum, e) =>
+        sum + Number(e.print_cost || 0) + Number(e.cutting_cost || 0) + Number(e.packaging_cost || 0) + Number(e.miscellaneous || 0), 0) : 0;
+    } catch (e) { /* expenses table may not exist yet */ }
 
-    // Get total expenses
-    const { data: expenses } = await supabase
-      .from('expenses')
-      .select('print_cost, cutting_cost, packaging_cost, miscellaneous');
-
-    const totalExpenses = expenses ? expenses.reduce((sum, e) =>
-      sum + Number(e.print_cost || 0) + Number(e.cutting_cost || 0) + Number(e.packaging_cost || 0) + Number(e.miscellaneous || 0), 0) : 0;
-
-    // Get total payouts received
-    const { data: payouts } = await supabase
-      .from('payouts')
-      .select('amount');
-
-    const totalPayouts = payouts ? payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0) : 0;
+    // Get total payouts received (with error handling for missing table)
+    let totalPayouts = 0;
+    try {
+      const { data: payouts } = await supabase.from('payouts').select('amount');
+      totalPayouts = payouts ? payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0) : 0;
+    } catch (e) { /* payouts table may not exist yet */ }
 
     res.json({
       todayOrders: todayOrders?.length || 0,
