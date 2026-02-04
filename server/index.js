@@ -70,6 +70,46 @@ const sendTelegramNotification = async (orderData) => {
   }
 };
 
+// --- HELPER: Auto-deduct inventory on order ---
+const deductInventoryForOrder = async (product_id) => {
+  try {
+    // Determine which products to deduct based on order type
+    let productIds = [];
+    if (product_id === 1) productIds = [1]; // Syndicate only
+    else if (product_id === 2) productIds = [2]; // Tong only
+    else if (product_id === 3) productIds = [1, 2]; // Bundle = both
+
+    for (const pid of productIds) {
+      // Deduct card_set, packet, and sticker for each product
+      const itemTypes = ['card_set', 'packet', 'sticker'];
+      for (const itemType of itemTypes) {
+        await supabase.rpc('decrement_stock', {
+          p_product_id: pid,
+          p_item_type: itemType
+        }).catch(() => {
+          // Fallback: manual decrement if RPC doesn't exist
+          return supabase
+            .from('inventory')
+            .select('id, stock')
+            .eq('product_id', pid)
+            .eq('item_type', itemType)
+            .single()
+            .then(({ data }) => {
+              if (data && data.stock > 0) {
+                return supabase
+                  .from('inventory')
+                  .update({ stock: data.stock - 1 })
+                  .eq('id', data.id);
+              }
+            });
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Inventory deduction error:", error.message);
+  }
+};
+
 // --- 1. ORDERS ---
 
 // Receive New Order (Checkout)
@@ -80,19 +120,23 @@ app.post('/api/create-order', async (req, res) => {
     const { data, error } = await supabase
       .from('orders')
       .insert([
-        { 
-          customer_name, 
-          customer_phone, 
-          customer_address, 
+        {
+          customer_name,
+          customer_phone,
+          customer_address,
           city,
-          product_id, 
-          quantity, 
-          total_price 
+          product_id,
+          quantity,
+          total_price
         }
       ])
       .select();
 
     if (error) throw error;
+
+    // Auto-deduct inventory
+    await deductInventoryForOrder(product_id);
+
     await sendTelegramNotification(req.body);
     res.json({ success: true, orderId: data[0].id });
 
@@ -448,7 +492,7 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
   }
 });
 
-// --- NEW ENDPOINT: SYNC ALL STATUS (UPDATED WITH REAL MAPPING) ---
+// --- FIXED: SYNC ALL STATUS (Uses tracking code endpoint) ---
 app.post('/api/steadfast/sync-all', async (req, res) => {
   const API_KEY = process.env.STEADFAST_API_KEY;
   const SECRET_KEY = process.env.STEADFAST_SECRET_KEY;
@@ -459,8 +503,7 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
     const { data: activeOrders, error } = await supabase
       .from('orders')
       .select('id, invoice_id, tracking_code, status')
-      .neq('status', 'Delivered')
-      .neq('status', 'Cancelled')
+      .not('status', 'in', '("Delivered","Cancelled")')
       .not('tracking_code', 'is', null);
 
     if (error) throw error;
@@ -469,55 +512,401 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
     }
 
     let updatedCount = 0;
+    const errors = [];
 
     // 2. Loop through each order and check status
     for (const order of activeOrders) {
       if (!order.tracking_code) continue;
 
-      const response = await fetch(`${BASE_URL}/status_by_cid/${order.tracking_code}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Api-Key': API_KEY,
-          'Secret-Key': SECRET_KEY
-        }
-      });
-      
-      const result = await response.json();
+      try {
+        // FIXED: Use status_by_trackingcode instead of status_by_cid
+        const response = await fetch(`${BASE_URL}/status_by_trackingcode/${order.tracking_code}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Api-Key': API_KEY,
+            'Secret-Key': SECRET_KEY
+          }
+        });
 
-      if (result.delivery_status) {
-        const sfStatus = result.delivery_status.toLowerCase();
-        let newStatus = order.status;
+        const result = await response.json();
 
-        // --- MAP STEADFAST STATUSES TO INTERNAL STATUSES ---
-        if (sfStatus === 'in_review') newStatus = 'Unassigned';
-        else if (sfStatus === 'pending') newStatus = 'Assigned';
-        else if (sfStatus === 'delivered') newStatus = 'Delivered';
-        else if (sfStatus === 'partial_delivered') newStatus = 'Partial Delivered';
-        else if (sfStatus === 'cancelled') newStatus = 'Cancelled';
-        else if (sfStatus === 'hold') newStatus = 'Hold';
-        
-        // Detailed Approval Statuses
-        else if (sfStatus === 'delivered_approval_pending') newStatus = 'Delivered (Pending Approval)';
-        else if (sfStatus === 'partial_delivered_approval_pending') newStatus = 'Partial (Pending Approval)';
-        else if (sfStatus === 'cancelled_approval_pending') newStatus = 'Cancelled (Pending Approval)';
-        else if (sfStatus === 'unknown_approval_pending') newStatus = 'Unknown (Pending Approval)';
-        
-        // 3. Update DB only if status changed
-        if (newStatus !== order.status) {
+        if (result.status === 200 && result.delivery_status) {
+          const sfStatus = result.delivery_status.toLowerCase();
+          let newStatus = order.status;
+
+          // --- MAP STEADFAST STATUSES TO INTERNAL STATUSES ---
+          if (sfStatus === 'in_review') newStatus = 'Unassigned';
+          else if (sfStatus === 'pending') newStatus = 'Assigned';
+          else if (sfStatus === 'delivered') newStatus = 'Delivered';
+          else if (sfStatus === 'partial_delivered') newStatus = 'Partial Delivered';
+          else if (sfStatus === 'cancelled') newStatus = 'Cancelled';
+          else if (sfStatus === 'hold') newStatus = 'Hold';
+
+          // Detailed Approval Statuses
+          else if (sfStatus === 'delivered_approval_pending') newStatus = 'Delivered (Pending Approval)';
+          else if (sfStatus === 'partial_delivered_approval_pending') newStatus = 'Partial (Pending Approval)';
+          else if (sfStatus === 'cancelled_approval_pending') newStatus = 'Cancelled (Pending Approval)';
+          else if (sfStatus === 'unknown_approval_pending') newStatus = 'Unknown (Pending Approval)';
+
+          // 3. Update DB only if status changed
+          if (newStatus !== order.status) {
             await supabase
               .from('orders')
               .update({ status: newStatus })
               .eq('id', order.id);
             updatedCount++;
+          }
         }
+      } catch (orderError) {
+        errors.push({ orderId: order.id, error: orderError.message });
       }
     }
 
-    res.json({ success: true, updated: updatedCount });
+    res.json({ success: true, updated: updatedCount, total: activeOrders.length, errors: errors.length > 0 ? errors : undefined });
 
   } catch (error) {
     console.error("Sync Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// --- INVENTORY MANAGEMENT ---
+// =============================================
+
+// Get all inventory items
+app.get('/api/inventory', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('inventory')
+      .select('*')
+      .order('category', { ascending: true });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get low stock items (for alerts)
+app.get('/api/inventory/low-stock', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('inventory')
+      .select('*');
+
+    if (error) throw error;
+
+    // Filter items where stock <= reorder_level
+    const lowStock = data.filter(item => item.stock <= item.reorder_level);
+    res.json(lowStock);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create inventory item
+app.post('/api/inventory', async (req, res) => {
+  const { category, item_name, stock, reorder_level, product_id, item_type } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('inventory')
+      .insert([{ category, item_name, stock, reorder_level, product_id, item_type }])
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update inventory item
+app.put('/api/inventory/:id', async (req, res) => {
+  const { id } = req.params;
+  const { stock, reorder_level, item_name, category } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('inventory')
+      .update({ stock, reorder_level, item_name, category, updated_at: new Date() })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete inventory item
+app.delete('/api/inventory/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { error } = await supabase.from('inventory').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk update stock (for restocking)
+app.post('/api/inventory/restock', async (req, res) => {
+  const { items } = req.body; // Array of { id, add_quantity }
+  try {
+    for (const item of items) {
+      const { data: current } = await supabase
+        .from('inventory')
+        .select('stock')
+        .eq('id', item.id)
+        .single();
+
+      if (current) {
+        await supabase
+          .from('inventory')
+          .update({ stock: current.stock + item.add_quantity, updated_at: new Date() })
+          .eq('id', item.id);
+      }
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// --- EXPENSES MANAGEMENT ---
+// =============================================
+
+// Get all expenses
+app.get('/api/expenses', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get expense totals
+app.get('/api/expenses/totals', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('print_cost, cutting_cost, packaging_cost, miscellaneous');
+
+    if (error) throw error;
+
+    const totals = data.reduce((acc, row) => ({
+      print: acc.print + Number(row.print_cost || 0),
+      cutting: acc.cutting + Number(row.cutting_cost || 0),
+      packaging: acc.packaging + Number(row.packaging_cost || 0),
+      miscellaneous: acc.miscellaneous + Number(row.miscellaneous || 0),
+      total: acc.total + Number(row.print_cost || 0) + Number(row.cutting_cost || 0) + Number(row.packaging_cost || 0) + Number(row.miscellaneous || 0)
+    }), { print: 0, cutting: 0, packaging: 0, miscellaneous: 0, total: 0 });
+
+    res.json(totals);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create expense
+app.post('/api/expenses', async (req, res) => {
+  const { date, print_cost, cutting_cost, packaging_cost, miscellaneous, particular, note } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('expenses')
+      .insert([{ date, print_cost, cutting_cost, packaging_cost, miscellaneous, particular, note }])
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update expense
+app.put('/api/expenses/:id', async (req, res) => {
+  const { id } = req.params;
+  const { date, print_cost, cutting_cost, packaging_cost, miscellaneous, particular, note } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('expenses')
+      .update({ date, print_cost, cutting_cost, packaging_cost, miscellaneous, particular, note })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete expense
+app.delete('/api/expenses/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// --- PAYOUTS MANAGEMENT ---
+// =============================================
+
+// Get all payouts
+app.get('/api/payouts', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('payouts')
+      .select('*')
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get payout total
+app.get('/api/payouts/total', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('payouts')
+      .select('amount');
+
+    if (error) throw error;
+
+    const total = data.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    res.json({ total });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create payout
+app.post('/api/payouts', async (req, res) => {
+  const { date, invoice_no, amount, note } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('payouts')
+      .insert([{ date, invoice_no, amount, note }])
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update payout
+app.put('/api/payouts/:id', async (req, res) => {
+  const { id } = req.params;
+  const { date, invoice_no, amount, note } = req.body;
+  try {
+    const { data, error } = await supabase
+      .from('payouts')
+      .update({ date, invoice_no, amount, note })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete payout
+app.delete('/api/payouts/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { error } = await supabase.from('payouts').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// --- DASHBOARD SUMMARY ---
+// =============================================
+
+// Get summary stats for dashboard
+app.get('/api/dashboard/summary', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get today's orders
+    const { data: todayOrders } = await supabase
+      .from('orders')
+      .select('id, total_price, status')
+      .gte('created_at', today);
+
+    // Get pending orders
+    const { data: pendingOrders } = await supabase
+      .from('orders')
+      .select('id')
+      .or('status.is.null,status.eq.Pending,status.eq.Pickup Pending');
+
+    // Get delivered today
+    const { data: deliveredToday } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('status', 'Delivered')
+      .gte('created_at', today);
+
+    // Get low stock items
+    const { data: inventory } = await supabase
+      .from('inventory')
+      .select('*');
+
+    const lowStock = inventory ? inventory.filter(item => item.stock <= item.reorder_level) : [];
+
+    // Get total expenses
+    const { data: expenses } = await supabase
+      .from('expenses')
+      .select('print_cost, cutting_cost, packaging_cost, miscellaneous');
+
+    const totalExpenses = expenses ? expenses.reduce((sum, e) =>
+      sum + Number(e.print_cost || 0) + Number(e.cutting_cost || 0) + Number(e.packaging_cost || 0) + Number(e.miscellaneous || 0), 0) : 0;
+
+    // Get total payouts received
+    const { data: payouts } = await supabase
+      .from('payouts')
+      .select('amount');
+
+    const totalPayouts = payouts ? payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0) : 0;
+
+    res.json({
+      todayOrders: todayOrders?.length || 0,
+      todayRevenue: todayOrders?.reduce((sum, o) => sum + Number(o.total_price || 0), 0) || 0,
+      pendingOrders: pendingOrders?.length || 0,
+      deliveredToday: deliveredToday?.length || 0,
+      lowStockCount: lowStock.length,
+      lowStockItems: lowStock,
+      totalExpenses,
+      totalPayouts
+    });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });

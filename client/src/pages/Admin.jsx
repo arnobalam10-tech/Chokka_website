@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3, RefreshCw, Menu, X } from 'lucide-react';
+import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3, RefreshCw, Menu, X, Boxes, Receipt, Wallet, LayoutDashboard, AlertTriangle, PackageCheck } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -11,7 +11,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const API_URL = 'https://chokka-server.onrender.com';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState('orders'); 
+  const [activeTab, setActiveTab] = useState('summary'); 
   const [orderSubTab, setOrderSubTab] = useState('All'); 
   const [contentSubTab, setContentSubTab] = useState(1);
   
@@ -19,9 +19,16 @@ export default function Admin() {
   const [orders, setOrders] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [products, setProducts] = useState([]); 
+  const [products, setProducts] = useState([]);
   const [gallery, setGallery] = useState([]);
-  
+
+  // NEW: Inventory, Expenses, Payouts, Summary State
+  const [inventory, setInventory] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [payouts, setPayouts] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [inventorySubTab, setInventorySubTab] = useState('All');
+
   // UI State
   const [uploading, setUploading] = useState(false);
   const [processingOrder, setProcessingOrder] = useState(null);
@@ -35,6 +42,7 @@ export default function Admin() {
 
   useEffect(() => {
     fetchOrders(); fetchProducts(); fetchCoupons(); fetchReviews(); fetchGallery();
+    fetchInventory(); fetchExpenses(); fetchPayouts(); fetchSummary();
   }, []);
 
   // --- API CALLS ---
@@ -43,6 +51,12 @@ export default function Admin() {
   const fetchCoupons = () => fetch(`${API_URL}/api/coupons`).then(r => r.json()).then(setCoupons);
   const fetchReviews = () => fetch(`${API_URL}/api/reviews`).then(r => r.json()).then(setReviews);
   const fetchGallery = () => fetch(`${API_URL}/api/gallery`).then(r => r.json()).then(setGallery);
+
+  // NEW: Fetch functions for Inventory, Expenses, Payouts, Summary
+  const fetchInventory = () => fetch(`${API_URL}/api/inventory`).then(r => r.json()).then(setInventory).catch(() => setInventory([]));
+  const fetchExpenses = () => fetch(`${API_URL}/api/expenses`).then(r => r.json()).then(setExpenses).catch(() => setExpenses([]));
+  const fetchPayouts = () => fetch(`${API_URL}/api/payouts`).then(r => r.json()).then(setPayouts).catch(() => setPayouts([]));
+  const fetchSummary = () => fetch(`${API_URL}/api/dashboard/summary`).then(r => r.json()).then(setSummary).catch(() => setSummary(null));
 
   // --- HELPER: Unified "Pending" Logic (Case Insensitive) ---
   const isPending = (status) => {
@@ -221,6 +235,121 @@ export default function Admin() {
   const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`${API_URL}/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
   const handleUploadAndSave = async (e) => { e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true); try { const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error; const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName); await fetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) }); alert("✅ Upload Successful!"); e.target.reset(); fetchGallery(); } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); } };
 
+  // --- INVENTORY CRUD ---
+  const createInventoryItem = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    await fetch(`${API_URL}/api/inventory`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: formData.get('category'),
+        item_name: formData.get('item_name'),
+        stock: Number(formData.get('stock')),
+        reorder_level: Number(formData.get('reorder_level')),
+        product_id: formData.get('product_id') ? Number(formData.get('product_id')) : null,
+        item_type: formData.get('item_type') || null
+      })
+    });
+    e.target.reset();
+    fetchInventory();
+  };
+
+  const updateInventoryItem = async (id, updatedData) => {
+    await fetch(`${API_URL}/api/inventory/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedData)
+    });
+    fetchInventory();
+    fetchSummary();
+  };
+
+  const deleteInventoryItem = async (id) => {
+    if (!confirm("Delete this inventory item?")) return;
+    await fetch(`${API_URL}/api/inventory/${id}`, { method: 'DELETE' });
+    fetchInventory();
+  };
+
+  // --- EXPENSES CRUD ---
+  const createExpense = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    await fetch(`${API_URL}/api/expenses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: formData.get('date'),
+        print_cost: Number(formData.get('print_cost')) || 0,
+        cutting_cost: Number(formData.get('cutting_cost')) || 0,
+        packaging_cost: Number(formData.get('packaging_cost')) || 0,
+        miscellaneous: Number(formData.get('miscellaneous')) || 0,
+        particular: formData.get('particular'),
+        note: formData.get('note')
+      })
+    });
+    e.target.reset();
+    fetchExpenses();
+    fetchSummary();
+  };
+
+  const deleteExpense = async (id) => {
+    if (!confirm("Delete this expense?")) return;
+    await fetch(`${API_URL}/api/expenses/${id}`, { method: 'DELETE' });
+    fetchExpenses();
+    fetchSummary();
+  };
+
+  // --- PAYOUTS CRUD ---
+  const createPayout = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    await fetch(`${API_URL}/api/payouts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: formData.get('date'),
+        invoice_no: formData.get('invoice_no'),
+        amount: Number(formData.get('amount')),
+        note: formData.get('note')
+      })
+    });
+    e.target.reset();
+    fetchPayouts();
+    fetchSummary();
+  };
+
+  const deletePayout = async (id) => {
+    if (!confirm("Delete this payout?")) return;
+    await fetch(`${API_URL}/api/payouts/${id}`, { method: 'DELETE' });
+    fetchPayouts();
+    fetchSummary();
+  };
+
+  // --- INVENTORY HELPERS ---
+  const getStockStatus = (item) => {
+    if (item.stock <= 0) return { label: 'OUT OF STOCK', color: 'bg-red-500 text-white' };
+    if (item.stock <= item.reorder_level) return { label: 'LOW STOCK', color: 'bg-orange-400 text-white' };
+    return { label: 'OK', color: 'bg-green-500 text-white' };
+  };
+
+  const getFilteredInventory = () => {
+    if (inventorySubTab === 'All') return inventory;
+    return inventory.filter(item => item.category === inventorySubTab);
+  };
+
+  const getExpenseTotals = () => {
+    return expenses.reduce((acc, e) => ({
+      print: acc.print + Number(e.print_cost || 0),
+      cutting: acc.cutting + Number(e.cutting_cost || 0),
+      packaging: acc.packaging + Number(e.packaging_cost || 0),
+      miscellaneous: acc.miscellaneous + Number(e.miscellaneous || 0),
+      total: acc.total + Number(e.print_cost || 0) + Number(e.cutting_cost || 0) + Number(e.packaging_cost || 0) + Number(e.miscellaneous || 0)
+    }), { print: 0, cutting: 0, packaging: 0, miscellaneous: 0, total: 0 });
+  };
+
+  const getPayoutTotal = () => payouts.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
   return (
     <div className="min-h-screen bg-gray-100 flex font-mono text-chokka-dark relative">
       
@@ -240,8 +369,12 @@ export default function Admin() {
       `}>
         <h1 className="text-2xl font-bold tracking-widest border-b border-gray-600 pb-4 hidden md:block">ADMIN</h1>
         <nav className="flex flex-col gap-2">
-            <button onClick={() => {setActiveTab('analytics'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-chokka-green text-chokka-dark' : ''}`}><BarChart3 size={20}/> ANALYTICS</button>
+            <button onClick={() => {setActiveTab('summary'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'summary' ? 'bg-chokka-green text-chokka-dark' : ''}`}><LayoutDashboard size={20}/> SUMMARY</button>
             <button onClick={() => {setActiveTab('orders'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'orders' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Package size={20}/> ORDERS</button>
+            <button onClick={() => {setActiveTab('inventory'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'inventory' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Boxes size={20}/> INVENTORY</button>
+            <button onClick={() => {setActiveTab('expenses'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'expenses' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Receipt size={20}/> EXPENSES</button>
+            <button onClick={() => {setActiveTab('payouts'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'payouts' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Wallet size={20}/> PAYOUTS</button>
+            <button onClick={() => {setActiveTab('analytics'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'analytics' ? 'bg-chokka-green text-chokka-dark' : ''}`}><BarChart3 size={20}/> ANALYTICS</button>
             <button onClick={() => {setActiveTab('products'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'products' ? 'bg-chokka-green text-chokka-dark' : ''}`}><DollarSign size={20}/> GAME SETTINGS</button>
             <button onClick={() => {setActiveTab('coupons'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'coupons' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Tag size={20}/> COUPONS</button>
             <button onClick={() => {setActiveTab('reviews'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'reviews' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Star size={20}/> REVIEWS</button>
@@ -251,6 +384,384 @@ export default function Admin() {
 
       <div className="w-full md:ml-64 p-4 md:p-10 mt-16 md:mt-0">
         {mobileMenuOpen && <div onClick={() => setMobileMenuOpen(false)} className="fixed inset-0 bg-black/50 z-20 md:hidden"></div>}
+
+        {/* --- SUMMARY TAB --- */}
+        {activeTab === 'summary' && (
+          <div>
+            <h2 className="text-3xl font-bold mb-8">BUSINESS OVERVIEW</h2>
+
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white p-5 shadow-lg border-2 border-black">
+                <div className="text-gray-500 font-bold text-xs uppercase mb-1 flex items-center gap-2"><Package size={16}/> Orders Today</div>
+                <div className="text-3xl font-black text-blue-600">{summary?.todayOrders || 0}</div>
+              </div>
+              <div className="bg-white p-5 shadow-lg border-2 border-black">
+                <div className="text-gray-500 font-bold text-xs uppercase mb-1 flex items-center gap-2"><TrendingUp size={16}/> Revenue Today</div>
+                <div className="text-3xl font-black text-green-600">{summary?.todayRevenue || 0}৳</div>
+              </div>
+              <div className="bg-white p-5 shadow-lg border-2 border-black bg-yellow-50">
+                <div className="text-gray-500 font-bold text-xs uppercase mb-1 flex items-center gap-2"><AlertCircle size={16}/> Pending Pickup</div>
+                <div className="text-3xl font-black text-yellow-600">{summary?.pendingOrders || 0}</div>
+              </div>
+              <div className="bg-white p-5 shadow-lg border-2 border-black bg-green-50">
+                <div className="text-gray-500 font-bold text-xs uppercase mb-1 flex items-center gap-2"><PackageCheck size={16}/> Delivered Today</div>
+                <div className="text-3xl font-black text-green-600">{summary?.deliveredToday || 0}</div>
+              </div>
+            </div>
+
+            {/* Financial Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="bg-white p-5 shadow-lg border-2 border-black">
+                <div className="text-gray-500 font-bold text-xs uppercase mb-1">Total Expenses</div>
+                <div className="text-2xl font-black text-red-500">-{summary?.totalExpenses || 0}৳</div>
+              </div>
+              <div className="bg-white p-5 shadow-lg border-2 border-black">
+                <div className="text-gray-500 font-bold text-xs uppercase mb-1">COD Received</div>
+                <div className="text-2xl font-black text-blue-600">+{summary?.totalPayouts || 0}৳</div>
+              </div>
+              <div className="bg-white p-5 shadow-lg border-2 border-black bg-green-100 border-green-600">
+                <div className="text-gray-600 font-bold text-xs uppercase mb-1">Net Cash Flow</div>
+                <div className="text-2xl font-black text-green-700">
+                  {((summary?.totalPayouts || 0) - (summary?.totalExpenses || 0)) >= 0 ? '+' : ''}
+                  {(summary?.totalPayouts || 0) - (summary?.totalExpenses || 0)}৳
+                </div>
+              </div>
+            </div>
+
+            {/* Low Stock Alerts */}
+            {summary?.lowStockItems && summary.lowStockItems.length > 0 && (
+              <div className="bg-red-50 border-2 border-red-400 p-6 shadow-lg mb-8">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-red-700">
+                  <AlertTriangle size={24}/> LOW STOCK ALERTS ({summary.lowStockCount})
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {summary.lowStockItems.map(item => (
+                    <div key={item.id} className="bg-white p-3 border-2 border-red-200 flex justify-between items-center">
+                      <div>
+                        <div className="font-bold">{item.item_name}</div>
+                        <div className="text-xs text-gray-500">{item.category}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-black text-red-600">{item.stock}</div>
+                        <div className="text-[10px] text-gray-400">Reorder at {item.reorder_level}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Quick Actions */}
+            <div className="bg-gray-50 border-2 border-gray-300 p-6">
+              <h3 className="text-lg font-bold mb-4">QUICK ACTIONS</h3>
+              <div className="flex gap-3 flex-wrap">
+                <button onClick={() => setActiveTab('orders')} className="bg-blue-600 text-white px-4 py-2 font-bold hover:bg-blue-700 flex items-center gap-2">
+                  <Package size={18}/> View Orders
+                </button>
+                <button onClick={() => setActiveTab('inventory')} className="bg-orange-500 text-white px-4 py-2 font-bold hover:bg-orange-600 flex items-center gap-2">
+                  <Boxes size={18}/> Manage Inventory
+                </button>
+                <button onClick={() => { fetchSummary(); fetchInventory(); fetchExpenses(); fetchPayouts(); }} className="bg-gray-700 text-white px-4 py-2 font-bold hover:bg-black flex items-center gap-2">
+                  <RefreshCw size={18}/> Refresh Data
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- INVENTORY TAB --- */}
+        {activeTab === 'inventory' && (
+          <div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
+              <h2 className="text-3xl font-bold">INVENTORY MANAGEMENT</h2>
+              <div className="text-sm font-bold text-gray-500">
+                Auto-deducts when orders are placed
+              </div>
+            </div>
+
+            {/* Category Tabs */}
+            <div className="flex gap-2 mb-6 border-b-2 border-gray-300 pb-2 overflow-x-auto">
+              {['All', 'Finished Goods', 'Packaging', 'Labels'].map(tab => (
+                <button key={tab} onClick={() => setInventorySubTab(tab)} className={`px-4 py-2 font-bold whitespace-nowrap rounded-t-lg transition-colors ${inventorySubTab === tab ? 'bg-chokka-dark text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{tab}</button>
+              ))}
+            </div>
+
+            {/* Add Inventory Form */}
+            <form onSubmit={createInventoryItem} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-wrap gap-4 items-end">
+              <div>
+                <label className="font-bold block text-xs mb-1">Category</label>
+                <select name="category" required className="border-2 border-gray-300 p-2 font-bold w-40">
+                  <option value="Finished Goods">Finished Goods</option>
+                  <option value="Packaging">Packaging</option>
+                  <option value="Labels">Labels</option>
+                </select>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Item Name</label>
+                <input name="item_name" required type="text" placeholder="e.g. Syndicate Card Set" className="border-2 border-gray-300 p-2 font-bold w-48"/>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Stock</label>
+                <input name="stock" required type="number" placeholder="10" className="border-2 border-gray-300 p-2 font-bold w-20"/>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Reorder Level</label>
+                <input name="reorder_level" required type="number" placeholder="5" className="border-2 border-gray-300 p-2 font-bold w-20"/>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Product</label>
+                <select name="product_id" className="border-2 border-gray-300 p-2 font-bold w-32">
+                  <option value="">None</option>
+                  <option value="1">Syndicate</option>
+                  <option value="2">Tong</option>
+                </select>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Item Type</label>
+                <select name="item_type" className="border-2 border-gray-300 p-2 font-bold w-28">
+                  <option value="">None</option>
+                  <option value="card_set">Card Set</option>
+                  <option value="packet">Packet</option>
+                  <option value="sticker">Sticker</option>
+                </select>
+              </div>
+              <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2">
+                <Plus size={18}/> ADD ITEM
+              </button>
+            </form>
+
+            {/* Inventory Table */}
+            <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
+              <table className="w-full text-left min-w-[700px]">
+                <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
+                  <tr>
+                    <th className="p-4">Item</th>
+                    <th className="p-4">Category</th>
+                    <th className="p-4">Stock</th>
+                    <th className="p-4">Reorder At</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getFilteredInventory().length === 0 ? (
+                    <tr><td colSpan="6" className="p-8 text-center text-gray-500 font-bold">No inventory items. Add some above or run the SQL setup.</td></tr>
+                  ) : (
+                    getFilteredInventory().map(item => {
+                      const status = getStockStatus(item);
+                      return (
+                        <tr key={item.id} className="border-b hover:bg-gray-50">
+                          <td className="p-4">
+                            <div className="font-bold">{item.item_name}</div>
+                            {item.product_id && <div className="text-[10px] text-gray-400">Product ID: {item.product_id}</div>}
+                          </td>
+                          <td className="p-4">
+                            <span className="bg-gray-100 px-2 py-1 text-xs font-bold">{item.category}</span>
+                          </td>
+                          <td className="p-4">
+                            <input
+                              type="number"
+                              className="w-20 p-2 border-2 border-gray-200 font-black text-center focus:border-chokka-green outline-none"
+                              defaultValue={item.stock}
+                              onBlur={(e) => updateInventoryItem(item.id, { stock: Number(e.target.value) })}
+                            />
+                          </td>
+                          <td className="p-4">
+                            <input
+                              type="number"
+                              className="w-16 p-2 border-2 border-gray-200 font-bold text-center focus:border-chokka-green outline-none"
+                              defaultValue={item.reorder_level}
+                              onBlur={(e) => updateInventoryItem(item.id, { reorder_level: Number(e.target.value) })}
+                            />
+                          </td>
+                          <td className="p-4">
+                            <span className={`px-3 py-1 rounded text-[10px] font-black uppercase ${status.color}`}>
+                              {status.label}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <button onClick={() => deleteInventoryItem(item.id)} className="text-red-500 hover:bg-red-100 p-2 rounded transition-colors">
+                              <Trash2 size={18}/>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* --- EXPENSES TAB --- */}
+        {activeTab === 'expenses' && (
+          <div className="max-w-5xl">
+            <h2 className="text-3xl font-bold mb-6">EXPENSE TRACKER</h2>
+
+            {/* Add Expense Form */}
+            <form onSubmit={createExpense} className="bg-white p-6 shadow-md border-2 border-black mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <label className="font-bold block text-xs mb-1">Date</label>
+                  <input name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} className="border-2 border-gray-300 p-2 font-bold w-full"/>
+                </div>
+                <div>
+                  <label className="font-bold block text-xs mb-1">Print Cost</label>
+                  <input name="print_cost" type="number" placeholder="0" className="border-2 border-gray-300 p-2 font-bold w-full"/>
+                </div>
+                <div>
+                  <label className="font-bold block text-xs mb-1">Cutting Cost</label>
+                  <input name="cutting_cost" type="number" placeholder="0" className="border-2 border-gray-300 p-2 font-bold w-full"/>
+                </div>
+                <div>
+                  <label className="font-bold block text-xs mb-1">Packaging Cost</label>
+                  <input name="packaging_cost" type="number" placeholder="0" className="border-2 border-gray-300 p-2 font-bold w-full"/>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="font-bold block text-xs mb-1">Miscellaneous</label>
+                  <input name="miscellaneous" type="number" placeholder="0" className="border-2 border-gray-300 p-2 font-bold w-full"/>
+                </div>
+                <div>
+                  <label className="font-bold block text-xs mb-1">Particular</label>
+                  <input name="particular" type="text" placeholder="Syndicate = 15p, Tong = 10p" className="border-2 border-gray-300 p-2 font-bold w-full"/>
+                </div>
+                <div>
+                  <label className="font-bold block text-xs mb-1">Note</label>
+                  <input name="note" type="text" placeholder="Additional notes..." className="border-2 border-gray-300 p-2 font-bold w-full"/>
+                </div>
+              </div>
+              <button className="bg-chokka-dark text-white px-6 py-2.5 font-bold hover:bg-black flex items-center gap-2">
+                <Plus size={18}/> ADD EXPENSE
+              </button>
+            </form>
+
+            {/* Expense Table */}
+            <div className="bg-white shadow-lg border-2 border-black overflow-x-auto mb-6">
+              <table className="w-full text-left min-w-[800px]">
+                <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
+                  <tr>
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Print</th>
+                    <th className="p-3">Cutting</th>
+                    <th className="p-3">Packaging</th>
+                    <th className="p-3">Misc</th>
+                    <th className="p-3">Total</th>
+                    <th className="p-3">Note</th>
+                    <th className="p-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenses.length === 0 ? (
+                    <tr><td colSpan="8" className="p-8 text-center text-gray-500 font-bold">No expenses recorded yet.</td></tr>
+                  ) : (
+                    expenses.map(e => (
+                      <tr key={e.id} className="border-b hover:bg-gray-50">
+                        <td className="p-3 font-bold text-sm">{e.date}</td>
+                        <td className="p-3 font-mono">{e.print_cost || 0}৳</td>
+                        <td className="p-3 font-mono">{e.cutting_cost || 0}৳</td>
+                        <td className="p-3 font-mono">{e.packaging_cost || 0}৳</td>
+                        <td className="p-3 font-mono">{e.miscellaneous || 0}৳</td>
+                        <td className="p-3 font-black text-red-600">{Number(e.print_cost || 0) + Number(e.cutting_cost || 0) + Number(e.packaging_cost || 0) + Number(e.miscellaneous || 0)}৳</td>
+                        <td className="p-3 text-xs text-gray-500 max-w-[150px] truncate" title={e.note}>{e.particular || e.note || '-'}</td>
+                        <td className="p-3">
+                          <button onClick={() => deleteExpense(e.id)} className="text-red-500 hover:bg-red-100 p-2 rounded transition-colors">
+                            <Trash2 size={16}/>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot className="bg-gray-100 border-t-2 border-black font-black">
+                  <tr>
+                    <td className="p-3">TOTALS</td>
+                    <td className="p-3">{getExpenseTotals().print}৳</td>
+                    <td className="p-3">{getExpenseTotals().cutting}৳</td>
+                    <td className="p-3">{getExpenseTotals().packaging}৳</td>
+                    <td className="p-3">{getExpenseTotals().miscellaneous}৳</td>
+                    <td className="p-3 text-red-600 text-lg">{getExpenseTotals().total}৳</td>
+                    <td colSpan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* --- PAYOUTS TAB --- */}
+        {activeTab === 'payouts' && (
+          <div className="max-w-4xl">
+            <h2 className="text-3xl font-bold mb-6">STEADFAST PAYOUTS</h2>
+
+            {/* Add Payout Form */}
+            <form onSubmit={createPayout} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-wrap gap-4 items-end">
+              <div>
+                <label className="font-bold block text-xs mb-1">Date</label>
+                <input name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} className="border-2 border-gray-300 p-2 font-bold w-40"/>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Invoice No</label>
+                <input name="invoice_no" type="text" placeholder="28063577" className="border-2 border-gray-300 p-2 font-bold w-32"/>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Amount (BDT)</label>
+                <input name="amount" type="number" required placeholder="1000" className="border-2 border-gray-300 p-2 font-bold w-28"/>
+              </div>
+              <div>
+                <label className="font-bold block text-xs mb-1">Note</label>
+                <input name="note" type="text" placeholder="Optional note" className="border-2 border-gray-300 p-2 font-bold w-40"/>
+              </div>
+              <button className="bg-green-600 text-white px-6 py-2.5 font-bold hover:bg-green-700 flex items-center gap-2">
+                <Plus size={18}/> ADD PAYOUT
+              </button>
+            </form>
+
+            {/* Payouts Table */}
+            <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
+                  <tr>
+                    <th className="p-4">Date</th>
+                    <th className="p-4">Invoice No</th>
+                    <th className="p-4">Amount</th>
+                    <th className="p-4">Note</th>
+                    <th className="p-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payouts.length === 0 ? (
+                    <tr><td colSpan="5" className="p-8 text-center text-gray-500 font-bold">No payouts recorded yet.</td></tr>
+                  ) : (
+                    payouts.map(p => (
+                      <tr key={p.id} className="border-b hover:bg-gray-50">
+                        <td className="p-4 font-bold">{p.date}</td>
+                        <td className="p-4 font-mono text-gray-600">{p.invoice_no || 'N/A'}</td>
+                        <td className="p-4 font-black text-green-600 text-lg">{p.amount}৳</td>
+                        <td className="p-4 text-sm text-gray-500">{p.note || '-'}</td>
+                        <td className="p-4">
+                          <button onClick={() => deletePayout(p.id)} className="text-red-500 hover:bg-red-100 p-2 rounded transition-colors">
+                            <Trash2 size={18}/>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot className="bg-green-50 border-t-2 border-green-600">
+                  <tr>
+                    <td colSpan="2" className="p-4 font-black text-lg">TOTAL RECEIVED</td>
+                    <td className="p-4 font-black text-green-700 text-2xl">{getPayoutTotal()}৳</td>
+                    <td colSpan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
 
         {activeTab === 'analytics' && (
             <div>
