@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ShoppingCart, Trophy, Clock, Menu, X, ArrowDown } from 'lucide-react';
 import CheckoutModal from '../components/CheckoutModal';
 import ReviewMarquee from '../components/ReviewMarquee';
+import { trackViewContent, PRODUCT_NAMES } from '../utils/metaPixel';
 
 // --- THIS LINE IS CRITICAL: 'export default' ---
 export default function GameTemplate({ 
@@ -34,10 +35,18 @@ export default function GameTemplate({
     // 1. Fetch Product Price
     fetch(`${API_URL}/api/products`)
       .then(res => res.json())
-      .then(data => { 
+      .then(data => {
         if (Array.isArray(data)) {
             const myGame = data.find(p => p.id === gameId);
-            if (myGame) setProduct(myGame);
+            if (myGame) {
+              setProduct(myGame);
+              // Track ViewContent when product data is loaded
+              trackViewContent({
+                content_name: PRODUCT_NAMES[gameId] || myGame.title,
+                content_ids: String(gameId),
+                value: myGame.price
+              });
+            }
         }
       })
       .catch(err => console.error("API Error"));

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Tag, ArrowUpCircle, Package } from 'lucide-react';
+import { trackInitiateCheckout, trackAddToCart, trackPurchase, PRODUCT_NAMES } from '../utils/metaPixel';
 
 export default function CheckoutModal({ isOpen, onClose, product }) {
   // --- 1. STATE MANAGEMENT ---
@@ -29,7 +30,17 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
     if (product) setActiveProduct(product);
   }, [product, isOpen]);
 
-  // --- 2. FETCH DATA (Images & Bundle Info) ---
+  // --- 2. TRACK INITIATE CHECKOUT ---
+  useEffect(() => {
+    if (!isOpen || !activeProduct) return;
+    trackInitiateCheckout({
+      content_name: PRODUCT_NAMES[activeProduct.id] || activeProduct.title,
+      content_ids: String(activeProduct.id),
+      value: activeProduct.price
+    });
+  }, [isOpen]);
+
+  // --- 3. FETCH DATA (Images & Bundle Info) ---
   useEffect(() => {
     if (!isOpen) return;
 
@@ -66,6 +77,12 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
     setActiveProduct(bundleData); // Swap to Bundle
     setDiscount(0); // Reset coupons on product change
     setCouponMsg('');
+    // Track AddToCart for bundle upsell
+    trackAddToCart({
+      content_name: PRODUCT_NAMES[bundleData.id] || bundleData.title,
+      content_ids: String(bundleData.id),
+      value: bundleData.price
+    });
   };
 
 
@@ -117,6 +134,12 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
       });
       const data = await response.json();
       if (data.success) {
+        // Track successful purchase
+        trackPurchase({
+          content_name: PRODUCT_NAMES[activeProduct.id] || activeProduct.title,
+          content_ids: String(activeProduct.id),
+          value: TOTAL
+        });
         setStatus('success');
         setTimeout(() => {
             onClose();

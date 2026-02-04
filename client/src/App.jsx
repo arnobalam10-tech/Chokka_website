@@ -1,6 +1,7 @@
-import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ShieldAlert, Zap, Users, Coffee, AlertTriangle, Search } from 'lucide-react';
+import { trackPageView } from './utils/metaPixel';
 
 // Page Imports
 import HomePage from './pages/HomePage.jsx';
@@ -15,6 +16,15 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
   return children;
+};
+
+// Meta Pixel PageView Tracker
+const PageViewTracker = () => {
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView();
+  }, [location.pathname]);
+  return null;
 };
 
 // --- GAME DATA CONFIGURATION ---
@@ -75,6 +85,7 @@ const TONG_DATA = {
 function App() {
   return (
     <HashRouter>
+      <PageViewTracker />
       <Routes>
         {/* 1. Public Website */}
         <Route path="/" element={<HomePage />} />
