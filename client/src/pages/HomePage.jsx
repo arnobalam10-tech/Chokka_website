@@ -161,7 +161,7 @@ export default function HomePage() {
                     </div>
 
                     <button className="w-full py-3 md:py-4 bg-[#1a3325] text-[#f8f5e6] font-black uppercase tracking-widest text-sm md:text-base flex items-center justify-center gap-2 group-hover:bg-[#2e8b57] transition-colors rounded-lg">
-                        Enter the Underworld <ArrowRight size={18}/>
+                        BUY NOW <ArrowRight size={18}/>
                     </button>
                 </div>
             </Link>
@@ -197,7 +197,7 @@ export default function HomePage() {
                     </div>
 
                     <button className="w-full py-3 md:py-4 bg-[#1a3325] text-[#f8f5e6] font-black uppercase tracking-widest text-sm md:text-base flex items-center justify-center gap-2 group-hover:bg-[#e63946] transition-colors rounded-lg">
-                        Pass the Paan <ArrowRight size={18}/>
+                        BUY NOW <ArrowRight size={18}/>
                     </button>
                 </div>
             </Link>
