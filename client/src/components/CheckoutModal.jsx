@@ -1,7 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Tag, ArrowUpCircle, Package } from 'lucide-react';
 import { trackInitiateCheckout, trackAddToCart, trackPurchase, PRODUCT_NAMES } from '../utils/metaPixel';
+
+// Module-level cache to prevent repeated API calls across modal opens
+const dataCache = {
+  gallery: null,
+  products: null,
+  timestamp: 0
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export default function CheckoutModal({ isOpen, onClose, product }) {
   // --- 1. STATE MANAGEMENT ---
@@ -40,31 +48,46 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
     });
   }, [isOpen]);
 
-  // --- 3. FETCH DATA (Images & Bundle Info) ---
+  // --- 3. FETCH DATA (Images & Bundle Info) - WITH CACHING ---
   useEffect(() => {
     if (!isOpen) return;
 
-    // A. Get Bundle Info (for the Upsell logic)
-    fetch(`${API_URL}/api/products`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
+    const now = Date.now();
+    const cacheValid = (now - dataCache.timestamp) < CACHE_TTL;
+
+    // A. Get Bundle Info (for the Upsell logic) - use cache if valid
+    if (cacheValid && dataCache.products) {
+      const bundle = dataCache.products.find(p => p.id === 3);
+      if (bundle) setBundleData(bundle);
+    } else {
+      fetch(`${API_URL}/api/products`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            dataCache.products = data;
+            dataCache.timestamp = Date.now();
             const bundle = data.find(p => p.id === 3);
             if (bundle) setBundleData(bundle);
-        }
-      })
-      .catch(err => console.error("Error fetching bundle info"));
+          }
+        })
+        .catch(() => console.error("Error fetching bundle info"));
+    }
 
-    // B. Get Image for the Active Product
-    fetch(`${API_URL}/api/gallery`)
-      .then(res => res.json())
-      .then(data => {
-        // Find the first image that matches the current product ID
-        const match = data.find(img => (img.product_id || 1) === activeProduct.id);
-        setThumbnail(match ? match.image_url : null);
-      })
-      .catch(err => console.error("Error fetching image"));
-
+    // B. Get Image for the Active Product - use cache if valid
+    if (cacheValid && dataCache.gallery) {
+      const match = dataCache.gallery.find(img => (img.product_id || 1) === activeProduct.id);
+      setThumbnail(match ? match.image_url : null);
+    } else {
+      fetch(`${API_URL}/api/gallery`)
+        .then(res => res.json())
+        .then(data => {
+          dataCache.gallery = data;
+          dataCache.timestamp = Date.now();
+          const match = data.find(img => (img.product_id || 1) === activeProduct.id);
+          setThumbnail(match ? match.image_url : null);
+        })
+        .catch(() => console.error("Error fetching image"));
+    }
   }, [activeProduct.id, isOpen]);
 
 
@@ -188,7 +211,7 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
                 <div className="flex gap-4 items-center border-b-2 border-[#1a3325]/20 pb-4">
                     <div className="w-20 h-20 bg-white border-2 border-[#1a3325] shrink-0 overflow-hidden shadow-sm">
                         {thumbnail ? (
-                            <img src={thumbnail} alt="Game" className="w-full h-full object-cover"/>
+                            <img src={thumbnail} alt="Game" loading="lazy" decoding="async" className="w-full h-full object-cover"/>
                         ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gray-200"><Package size={24} className="opacity-30"/></div>
                         )}

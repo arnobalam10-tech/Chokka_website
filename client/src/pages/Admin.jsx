@@ -972,7 +972,7 @@ export default function Admin() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     {gallery.filter(img => (img.product_id || 1) === contentSubTab).map(img => (
                         <div key={img.id} className="bg-white border-2 border-black p-2 relative group shadow-lg overflow-hidden">
-                            <img src={img.image_url} alt="Visual" className="w-full h-48 object-cover border border-gray-200 bg-gray-100 transition-transform group-hover:scale-105"/>
+                            <img src={img.image_url} alt="Visual" loading="lazy" decoding="async" className="w-full h-48 object-cover border border-gray-200 bg-gray-100 transition-transform group-hover:scale-105"/>
                             {img.caption && <div className="mt-2 font-bold text-[10px] text-center uppercase tracking-wider text-gray-600">{img.caption}</div>}
                             <button onClick={() => deleteImage(img.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={16} /></button>
                         </div>

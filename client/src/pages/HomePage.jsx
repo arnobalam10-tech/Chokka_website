@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, ArrowRight, Zap, ShieldAlert, Package, Truck, Award, Users, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CheckoutModal from '../components/CheckoutModal';
+
+// Simple in-memory cache for gallery data to prevent repeated fetches
+const galleryCache = { data: null, timestamp: 0 };
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 const QUIRKY_TAGLINES = [
   "Ready for the next game night?",
@@ -43,12 +47,12 @@ export default function HomePage() {
     price: 600 
   });
 
-  // 1. Fetch Data & Set Random Tagline
+  // 1. Fetch Data & Set Random Tagline (with caching to prevent egress spikes)
   useEffect(() => {
     // Set random tagline on mount
     setRandomTagline(QUIRKY_TAGLINES[Math.floor(Math.random() * QUIRKY_TAGLINES.length)]);
 
-    const API_URL = 'https://chokka-server.onrender.com'; 
+    const API_URL = 'https://chokka-server.onrender.com';
 
     fetch(`${API_URL}/api/products`)
       .then(res => res.json())
@@ -60,31 +64,47 @@ export default function HomePage() {
       })
       .catch(err => console.error("Error fetching bundle"));
 
+    // Use cached gallery data if available and fresh
+    const now = Date.now();
+    if (galleryCache.data && (now - galleryCache.timestamp) < CACHE_DURATION) {
+      setGallery(galleryCache.data);
+      return;
+    }
+
     fetch(`${API_URL}/api/gallery`)
       .then(res => res.json())
-      .then(data => setGallery(data || []))
+      .then(data => {
+        const galleryData = data || [];
+        galleryCache.data = galleryData;
+        galleryCache.timestamp = Date.now();
+        setGallery(galleryData);
+      })
       .catch(err => console.error("Error fetching images"));
   }, []);
 
-  // 2. Filter Images
-  const syndicateImages = gallery.filter(img => (img.product_id || 1) === 1);
-  const tongImages = gallery.filter(img => (img.product_id || 1) === 2);
-  const bundleImages = gallery.filter(img => (img.product_id || 1) === 3); // NEW: Get Bundle Images
+  // 2. Filter Images - MEMOIZED to prevent recalculation on every render
+  const syndicateImages = useMemo(() => gallery.filter(img => (img.product_id || 1) === 1), [gallery]);
+  const tongImages = useMemo(() => gallery.filter(img => (img.product_id || 1) === 2), [gallery]);
+  const bundleImages = useMemo(() => gallery.filter(img => (img.product_id || 1) === 3), [gallery]);
 
-  // 3. Cycle Timers
+  // Store lengths in refs to stabilize useEffect dependencies
+  const syndicateCount = syndicateImages.length;
+  const tongCount = tongImages.length;
+
+  // 3. Cycle Timers - using stable numeric dependencies
   useEffect(() => {
-    if (syndicateImages.length > 1) {
-        const interval = setInterval(() => setSynIndex(prev => (prev + 1) % syndicateImages.length), 5000);
+    if (syndicateCount > 1) {
+        const interval = setInterval(() => setSynIndex(prev => (prev + 1) % syndicateCount), 5000);
         return () => clearInterval(interval);
     }
-  }, [syndicateImages.length]);
+  }, [syndicateCount]);
 
   useEffect(() => {
-    if (tongImages.length > 1) {
-        const interval = setInterval(() => setTongIndex(prev => (prev + 1) % tongImages.length), 5000);
+    if (tongCount > 1) {
+        const interval = setInterval(() => setTongIndex(prev => (prev + 1) % tongCount), 5000);
         return () => clearInterval(interval);
     }
-  }, [tongImages.length]);
+  }, [tongCount]);
 
   // Animation Variants
   const fadeInUp = {
@@ -150,14 +170,16 @@ export default function HomePage() {
                     <div className="mt-auto relative w-full h-56 md:h-64 border-2 border-[#1a3325] bg-gray-200 mb-6 overflow-hidden rounded-lg shadow-inner">
                         <AnimatePresence mode='wait'>
                             {syndicateImages.length > 0 ? (
-                                <motion.img 
+                                <motion.img
                                     key={synIndex}
-                                    initial={{ opacity: 0, scale: 1.1 }} 
-                                    animate={{ opacity: 1, scale: 1 }} 
+                                    initial={{ opacity: 0, scale: 1.1 }}
+                                    animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0 }}
                                     transition={{ duration: 0.7 }}
-                                    src={syndicateImages[synIndex].image_url} 
-                                    alt="Syndicate" 
+                                    src={syndicateImages[synIndex].image_url}
+                                    alt="Syndicate"
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full h-full object-cover absolute inset-0"
                                 />
                             ) : (
@@ -191,14 +213,16 @@ export default function HomePage() {
                     <div className="mt-auto relative w-full h-56 md:h-64 border-2 border-[#1a3325] bg-gray-200 mb-6 overflow-hidden rounded-lg shadow-inner">
                         <AnimatePresence mode='wait'>
                             {tongImages.length > 0 ? (
-                                <motion.img 
+                                <motion.img
                                     key={tongIndex}
-                                    initial={{ opacity: 0, scale: 1.1 }} 
-                                    animate={{ opacity: 1, scale: 1 }} 
+                                    initial={{ opacity: 0, scale: 1.1 }}
+                                    animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0 }}
                                     transition={{ duration: 0.7 }}
-                                    src={tongImages[tongIndex].image_url} 
-                                    alt="Tong" 
+                                    src={tongImages[tongIndex].image_url}
+                                    alt="Tong"
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full h-full object-cover absolute inset-0"
                                 />
                             ) : (
@@ -249,9 +273,11 @@ export default function HomePage() {
             {/* Right: 16:9 Cinematic Image (Fetched from Admin) */}
             <div className="w-full aspect-video bg-gray-200 border-4 border-[#1a3325] shadow-[12px_12px_0px_0px_#1a3325] rounded-xl overflow-hidden relative group">
                 {bundleImages.length > 0 ? (
-                    <img 
-                        src={bundleImages[0].image_url} 
-                        alt="Chokka Bundle" 
+                    <img
+                        src={bundleImages[0].image_url}
+                        alt="Chokka Bundle"
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />
                 ) : (

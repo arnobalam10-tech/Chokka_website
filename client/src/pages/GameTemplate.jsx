@@ -1,21 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ShoppingCart, Trophy, Clock, Menu, X, ArrowDown } from 'lucide-react';
+import { ShoppingCart, Trophy, Clock } from 'lucide-react';
 import CheckoutModal from '../components/CheckoutModal';
 import ReviewMarquee from '../components/ReviewMarquee';
 import { trackViewContent, PRODUCT_NAMES } from '../utils/metaPixel';
 
+// Module-level cache to prevent repeated gallery fetches
+const templateCache = {
+  gallery: {},  // keyed by gameId
+  reviews: {},  // keyed by gameId
+  products: null,
+  timestamp: 0
+};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // --- THIS LINE IS CRITICAL: 'export default' ---
-export default function GameTemplate({ 
-  gameId, 
-  title, 
-  subtitle, 
-  tagline, 
-  storyTitle, 
-  storyText, 
-  features, 
-  colors, 
-  heroImage 
+export default function GameTemplate({
+  gameId,
+  title,
+  subtitle,
+  tagline,
+  storyTitle,
+  storyText,
+  features,
+  colors
 }) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [gallery, setGallery] = useState([]);
@@ -28,46 +36,72 @@ export default function GameTemplate({
     price: 0 
   });
 
-  // FETCH DATA
+  // FETCH DATA - WITH CACHING to prevent excessive Supabase egress
   useEffect(() => {
-    const API_URL = 'https://chokka-server.onrender.com'; 
+    const API_URL = 'https://chokka-server.onrender.com';
+    const now = Date.now();
+    const cacheValid = (now - templateCache.timestamp) < CACHE_TTL;
 
-    // 1. Fetch Product Price
-    fetch(`${API_URL}/api/products`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
+    // 1. Fetch Product Price - use cache if valid
+    if (cacheValid && templateCache.products) {
+      const myGame = templateCache.products.find(p => p.id === gameId);
+      if (myGame) {
+        setProduct(myGame);
+        trackViewContent({
+          content_name: PRODUCT_NAMES[gameId] || myGame.title,
+          content_ids: String(gameId),
+          value: myGame.price
+        });
+      }
+    } else {
+      fetch(`${API_URL}/api/products`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            templateCache.products = data;
+            templateCache.timestamp = Date.now();
             const myGame = data.find(p => p.id === gameId);
             if (myGame) {
               setProduct(myGame);
-              // Track ViewContent when product data is loaded
               trackViewContent({
                 content_name: PRODUCT_NAMES[gameId] || myGame.title,
                 content_ids: String(gameId),
                 value: myGame.price
               });
             }
-        }
-      })
-      .catch(err => console.error("API Error"));
+          }
+        })
+        .catch(() => console.error("API Error"));
+    }
 
-    // 2. Fetch Gallery
-    fetch(`${API_URL}/api/gallery`)
-      .then(res => res.json())
-      .then(data => {
-        const myImages = data.filter(img => (img.product_id || 1) === gameId);
-        setGallery(myImages);
-      })
-      .catch(() => {});
+    // 2. Fetch Gallery - use cache if valid for this gameId
+    if (cacheValid && templateCache.gallery[gameId]) {
+      setGallery(templateCache.gallery[gameId]);
+    } else {
+      fetch(`${API_URL}/api/gallery`)
+        .then(res => res.json())
+        .then(data => {
+          const myImages = data.filter(img => (img.product_id || 1) === gameId);
+          templateCache.gallery[gameId] = myImages;
+          templateCache.timestamp = Date.now();
+          setGallery(myImages);
+        })
+        .catch(() => {});
+    }
 
-    // 3. Fetch Reviews
-    fetch(`${API_URL}/api/reviews`)
-      .then(res => res.json())
-      .then(data => {
-        const myReviews = data.filter(r => (r.product_id || 1) === gameId);
-        setReviews(myReviews);
-      })
-      .catch(() => {});
+    // 3. Fetch Reviews - use cache if valid for this gameId
+    if (cacheValid && templateCache.reviews[gameId]) {
+      setReviews(templateCache.reviews[gameId]);
+    } else {
+      fetch(`${API_URL}/api/reviews`)
+        .then(res => res.json())
+        .then(data => {
+          const myReviews = data.filter(r => (r.product_id || 1) === gameId);
+          templateCache.reviews[gameId] = myReviews;
+          setReviews(myReviews);
+        })
+        .catch(() => {});
+    }
   }, [gameId]); 
 
   // Dynamic Styles
@@ -199,7 +233,13 @@ export default function GameTemplate({
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {gallery.map((img, idx) => (
                         <div key={idx} className="aspect-square bg-white border-4 border-black overflow-hidden group relative shadow-lg">
-                            <img src={img.image_url} alt="Game Shot" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
+                            <img
+                              src={img.image_url}
+                              alt="Game Shot"
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                            />
                         </div>
                     ))}
                 </div>
