@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ShoppingCart, ArrowRight, Zap, ShieldAlert, Package, Truck, Award, Users, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import CheckoutModal from '../components/CheckoutModal';
@@ -36,9 +36,6 @@ export default function HomePage() {
   const [gallery, setGallery] = useState([]);
   const [randomTagline, setRandomTagline] = useState("");
   
-  // Image Cycling State
-  const [synIndex, setSynIndex] = useState(0);
-  const [tongIndex, setTongIndex] = useState(0);
 
   // State for the Bundle Product (ID: 3)
   const [bundleProduct, setBundleProduct] = useState({
@@ -87,24 +84,6 @@ export default function HomePage() {
   const tongImages = useMemo(() => gallery.filter(img => (img.product_id || 1) === 2), [gallery]);
   const bundleImages = useMemo(() => gallery.filter(img => (img.product_id || 1) === 3), [gallery]);
 
-  // Store lengths in refs to stabilize useEffect dependencies
-  const syndicateCount = syndicateImages.length;
-  const tongCount = tongImages.length;
-
-  // 3. Cycle Timers - using stable numeric dependencies
-  useEffect(() => {
-    if (syndicateCount > 1) {
-        const interval = setInterval(() => setSynIndex(prev => (prev + 1) % syndicateCount), 5000);
-        return () => clearInterval(interval);
-    }
-  }, [syndicateCount]);
-
-  useEffect(() => {
-    if (tongCount > 1) {
-        const interval = setInterval(() => setTongIndex(prev => (prev + 1) % tongCount), 5000);
-        return () => clearInterval(interval);
-    }
-  }, [tongCount]);
 
   // Animation Variants
   const fadeInUp = {
@@ -168,24 +147,17 @@ export default function HomePage() {
                     </div>
 
                     <div className="mt-auto relative w-full h-56 md:h-64 border-2 border-[#1a3325] bg-gray-200 mb-6 overflow-hidden rounded-lg shadow-inner">
-                        <AnimatePresence mode='wait'>
-                            {syndicateImages.length > 0 ? (
-                                <motion.img
-                                    key={synIndex}
-                                    initial={{ opacity: 0, scale: 1.1 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: 0.7 }}
-                                    src={syndicateImages[synIndex].image_url}
-                                    alt="Syndicate"
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-full h-full object-cover absolute inset-0"
-                                />
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase text-xs">No Visuals</div>
-                            )}
-                        </AnimatePresence>
+                        {syndicateImages.length > 0 ? (
+                            <img
+                                src={syndicateImages[0].image_url}
+                                alt="Syndicate"
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover absolute inset-0"
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase text-xs">No Visuals</div>
+                        )}
                     </div>
 
                     <button className="w-full py-3 md:py-4 bg-[#1a3325] text-[#f8f5e6] font-black uppercase tracking-widest text-sm md:text-base flex items-center justify-center gap-2 group-hover:bg-[#2e8b57] transition-colors rounded-lg">
@@ -211,24 +183,17 @@ export default function HomePage() {
                     </div>
 
                     <div className="mt-auto relative w-full h-56 md:h-64 border-2 border-[#1a3325] bg-gray-200 mb-6 overflow-hidden rounded-lg shadow-inner">
-                        <AnimatePresence mode='wait'>
-                            {tongImages.length > 0 ? (
-                                <motion.img
-                                    key={tongIndex}
-                                    initial={{ opacity: 0, scale: 1.1 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: 0.7 }}
-                                    src={tongImages[tongIndex].image_url}
-                                    alt="Tong"
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-full h-full object-cover absolute inset-0"
-                                />
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase text-xs">No Visuals</div>
-                            )}
-                        </AnimatePresence>
+                        {tongImages.length > 0 ? (
+                            <img
+                                src={tongImages[0].image_url}
+                                alt="Tong"
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover absolute inset-0"
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-400 font-bold uppercase text-xs">No Visuals</div>
+                        )}
                     </div>
 
                     <button className="w-full py-3 md:py-4 bg-[#1a3325] text-[#f8f5e6] font-black uppercase tracking-widest text-sm md:text-base flex items-center justify-center gap-2 group-hover:bg-[#e63946] transition-colors rounded-lg">
