@@ -3,8 +3,8 @@ import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as Ima
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
-const supabaseUrl = 'https://sqflulpuxotfkjsjqquv.supabase.co'; 
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxZmx1bHB1eG90Zmtqc2pxcXV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgxNTAxODEsImV4cCI6MjA4MzcyNjE4MX0.ByYhjp6lwpZxwnYI1zDUwtR6cI0ekUWWPHKRhKsDw8M'; 
+const supabaseUrl = 'https://efijepzbnhnslljvpakc.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmaWplcHpibmhuc2xsanZwYWtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NzY4OTEsImV4cCI6MjA4NzE1Mjg5MX0.c6YEmjWZgPp2xifpAFYibtyaMkXHHYfULCsAvS5DpAA'; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- LIVE SERVER ---
