@@ -8,6 +8,7 @@ import HomePage from './pages/HomePage.jsx';
 import GameTemplate from './pages/GameTemplate.jsx';
 import Admin from './pages/Admin.jsx';
 import Login from './pages/Loginl.jsx';
+import ScrollToTop from './components/ScrollToTop.jsx';
 
 // Security Guard
 const ProtectedRoute = ({ children }) => {
@@ -85,6 +86,7 @@ const TONG_DATA = {
 function App() {
   return (
     <HashRouter>
+      <ScrollToTop />
       <PageViewTracker />
       <Routes>
         {/* 1. Public Website */}

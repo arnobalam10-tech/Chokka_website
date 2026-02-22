@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(node:*)",
+      "Bash(move \"d:\\\\CHOKKA WEBSITE\\\\migrate.js\" \"d:\\\\CHOKKA WEBSITE\\\\server\\\\migrate.js\")",
+      "Bash(git push:*)",
+      "WebFetch(domain:www.flexfume.com)",
+      "Bash(timeout:*)",
+      "Bash(npx vite build:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx vite:*)",
+      "Bash(del \"client\\\\src\\\\components\\\\ScrollReveal.jsx\")",
+      "Bash(del \"client\\\\src\\\\components\\\\MarqueeBanner.jsx\")",
+      "Bash(npm run build:*)"
+    ]
+  }
+}
