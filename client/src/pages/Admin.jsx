@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3, RefreshCw, Menu, X, Boxes, Receipt, Wallet, LayoutDashboard, AlertTriangle, PackageCheck } from 'lucide-react';
+import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3, RefreshCw, Menu, X, Boxes, Receipt, Wallet, LayoutDashboard, AlertTriangle, PackageCheck, Award } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -29,6 +29,14 @@ export default function Admin() {
   const [summary, setSummary] = useState(null);
   const [inventorySubTab, setInventorySubTab] = useState('All');
 
+  // Celebrity Reviews State
+  const [celebReviews, setCelebReviews] = useState([]);
+  const [celebForm, setCelebForm] = useState({ name: '', role: '', company: '', rating: 5, quote: '' });
+  const [celebImageFile, setCelebImageFile] = useState(null);
+  const [celebImagePreview, setCelebImagePreview] = useState('');
+  const [celebUploading, setCelebUploading] = useState(false);
+  const [showCelebSQL, setShowCelebSQL] = useState(false);
+
   // UI State
   const [uploading, setUploading] = useState(false);
   const [processingOrder, setProcessingOrder] = useState(null);
@@ -43,6 +51,7 @@ export default function Admin() {
   useEffect(() => {
     fetchOrders(); fetchProducts(); fetchCoupons(); fetchReviews(); fetchGallery();
     fetchInventory(); fetchExpenses(); fetchPayouts(); fetchSummary();
+    fetchCelebReviews();
   }, []);
 
   // --- API CALLS ---
@@ -235,6 +244,55 @@ export default function Admin() {
   const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`${API_URL}/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
   const handleUploadAndSave = async (e) => { e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true); try { const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error; const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName); await fetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) }); alert("✅ Upload Successful!"); e.target.reset(); fetchGallery(); } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); } };
 
+  // --- CELEBRITY REVIEWS CRUD ---
+  const fetchCelebReviews = async () => {
+    const { data } = await supabase.from('celebrity_reviews').select('*').order('created_at', { ascending: true });
+    if (data) setCelebReviews(data);
+  };
+
+  const createCelebReview = async (e) => {
+    e.preventDefault();
+    if (!celebForm.name || !celebForm.quote) return alert('Name and quote are required.');
+    setCelebUploading(true);
+    try {
+      let imageUrl = '';
+      if (celebImageFile) {
+        const ext = celebImageFile.name.split('.').pop();
+        const fileName = `celebrities/${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, celebImageFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      }
+      const { error } = await supabase.from('celebrity_reviews').insert({ ...celebForm, image_url: imageUrl });
+      if (error) throw error;
+      setCelebForm({ name: '', role: '', company: '', rating: 5, quote: '' });
+      setCelebImageFile(null);
+      setCelebImagePreview('');
+      fetchCelebReviews();
+      alert('✅ Celebrity review added!');
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      setCelebUploading(false);
+    }
+  };
+
+  const deleteCelebReview = async (id) => {
+    if (!confirm('Delete this celebrity review?')) return;
+    await supabase.from('celebrity_reviews').delete().eq('id', id);
+    fetchCelebReviews();
+  };
+
+  const handleCelebImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCelebImageFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setCelebImagePreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
   const handleCardUpload = async (e, cardType) => {
     e.preventDefault();
     const file = e.target.file_input.files[0];
@@ -403,6 +461,7 @@ export default function Admin() {
             <button onClick={() => {setActiveTab('products'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'products' ? 'bg-chokka-green text-chokka-dark' : ''}`}><DollarSign size={20}/> GAME SETTINGS</button>
             <button onClick={() => {setActiveTab('coupons'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'coupons' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Tag size={20}/> COUPONS</button>
             <button onClick={() => {setActiveTab('reviews'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'reviews' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Star size={20}/> REVIEWS</button>
+            <button onClick={() => {setActiveTab('celeb_reviews'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'celeb_reviews' ? 'bg-chokka-green text-chokka-dark' : ''}`}><Award size={20}/> CELEB REVIEWS</button>
             <button onClick={() => {setActiveTab('visuals'); setMobileMenuOpen(false);}} className={`text-left p-3 font-bold hover:bg-gray-800 flex items-center gap-3 ${activeTab === 'visuals' ? 'bg-chokka-green text-chokka-dark' : ''}`}><ImageIcon size={20}/> VISUALS</button>
         </nav>
       </div>
@@ -1093,6 +1152,197 @@ export default function Admin() {
             </div>
         )}
       </div>
+
+      {/* --- CELEBRITY REVIEWS TAB --- */}
+      {activeTab === 'celeb_reviews' && (
+        <div className="max-w-4xl">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-3xl font-bold flex items-center gap-3"><Award size={28}/> Celebrity Reviews</h2>
+              <p className="text-sm text-gray-500 mt-1 font-bold">These appear in the "What the Famous Say" section on the home page.</p>
+            </div>
+          </div>
+
+          {/* Supabase Setup Instructions */}
+          <div className="bg-amber-50 border-2 border-amber-400 p-4 mb-8">
+            <button onClick={() => setShowCelebSQL(s => !s)} className="w-full text-left flex items-center justify-between font-bold text-amber-800 text-sm">
+              <span>⚠️ First time? Run this SQL in your Supabase SQL Editor to create the table.</span>
+              <span>{showCelebSQL ? '▲ Hide' : '▼ Show SQL'}</span>
+            </button>
+            {showCelebSQL && (
+              <pre className="mt-3 bg-gray-900 text-green-400 p-4 text-xs overflow-x-auto rounded font-mono leading-relaxed">{`CREATE TABLE celebrity_reviews (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  role TEXT DEFAULT '',
+  company TEXT DEFAULT '',
+  rating INTEGER DEFAULT 5,
+  quote TEXT DEFAULT '',
+  image_url TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE celebrity_reviews ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read" ON celebrity_reviews FOR SELECT USING (true);
+CREATE POLICY "Anon insert" ON celebrity_reviews FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anon delete" ON celebrity_reviews FOR DELETE USING (true);`}</pre>
+            )}
+          </div>
+
+          {/* Add New Celebrity Review Form */}
+          <form onSubmit={createCelebReview} className="bg-white border-2 border-black shadow-md p-6 mb-10">
+            <h3 className="text-lg font-black uppercase tracking-tight mb-5 border-b-2 border-gray-200 pb-3">
+              Add New Celebrity Review
+            </h3>
+
+            {/* Image upload */}
+            <div className="mb-5">
+              <label className="font-bold block text-xs uppercase mb-2">Photo (WebP recommended)</label>
+              <div className="flex items-center gap-4">
+                {/* Preview circle */}
+                <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-300 overflow-hidden flex items-center justify-center bg-gray-50 flex-shrink-0">
+                  {celebImagePreview
+                    ? <img src={celebImagePreview} alt="preview" className="w-full h-full object-cover"/>
+                    : <ImageIcon size={24} className="text-gray-300"/>
+                  }
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/webp,image/jpeg,image/png"
+                    onChange={handleCelebImageChange}
+                    className="border-2 border-gray-300 p-2 font-bold w-full bg-white text-sm"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 font-bold">Accepts .webp, .jpg, .png · Will show initials if no photo</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Name + Role */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="font-bold block text-xs uppercase mb-1">Name *</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. Nafis Rafsan"
+                  value={celebForm.name}
+                  onChange={e => setCelebForm(f => ({ ...f, name: e.target.value }))}
+                  className="border-2 border-gray-300 p-2 font-bold w-full focus:border-chokka-green outline-none"
+                />
+              </div>
+              <div>
+                <label className="font-bold block text-xs uppercase mb-1">Role / Title *</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. Influencer | Content Creator"
+                  value={celebForm.role}
+                  onChange={e => setCelebForm(f => ({ ...f, role: e.target.value }))}
+                  className="border-2 border-gray-300 p-2 font-bold w-full focus:border-chokka-green outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Company + Rating */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="font-bold block text-xs uppercase mb-1">Company / Brand <span className="text-gray-400 normal-case">(optional)</span></label>
+                <input
+                  type="text"
+                  placeholder="e.g. Founder, 10 Minute School"
+                  value={celebForm.company}
+                  onChange={e => setCelebForm(f => ({ ...f, company: e.target.value }))}
+                  className="border-2 border-gray-300 p-2 font-bold w-full focus:border-chokka-green outline-none"
+                />
+              </div>
+              <div>
+                <label className="font-bold block text-xs uppercase mb-2">Rating</label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setCelebForm(f => ({ ...f, rating: n }))}
+                      className={`text-2xl transition-transform hover:scale-110 ${n <= celebForm.rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                  <span className="text-sm font-bold text-gray-500 ml-2 self-center">{celebForm.rating}/5</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quote */}
+            <div className="mb-5">
+              <label className="font-bold block text-xs uppercase mb-1">Their Quote *</label>
+              <textarea
+                required
+                rows={3}
+                placeholder="What did they say about Chokka? e.g. Cool game! Very relatable to our country..."
+                value={celebForm.quote}
+                onChange={e => setCelebForm(f => ({ ...f, quote: e.target.value }))}
+                className="border-2 border-gray-300 p-3 font-bold w-full resize-none focus:border-chokka-green outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={celebUploading}
+              className="bg-chokka-dark text-white px-8 py-3 font-black uppercase tracking-widest hover:bg-black flex items-center gap-2 disabled:opacity-50 transition-colors"
+            >
+              {celebUploading ? <><Upload size={18} className="animate-pulse"/> Uploading...</> : <><Plus size={18}/> Add Celebrity Review</>}
+            </button>
+          </form>
+
+          {/* Existing Reviews List */}
+          <div>
+            <h3 className="text-lg font-black uppercase tracking-tight mb-4 flex items-center gap-2">
+              <Star size={18}/> Live Reviews ({celebReviews.length})
+            </h3>
+
+            {celebReviews.length === 0 ? (
+              <div className="bg-gray-50 border-2 border-dashed border-gray-300 p-10 text-center text-gray-400 font-bold">
+                No celebrity reviews yet. Add one above.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {celebReviews.map(r => (
+                  <div key={r.id} className="bg-white border-2 border-gray-200 p-4 shadow-sm flex gap-3 group relative hover:border-black transition-colors">
+                    {/* Avatar */}
+                    <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-gray-200 bg-gradient-to-br from-green-600 to-green-900 flex items-center justify-center flex-shrink-0">
+                      {r.image_url
+                        ? <img src={r.image_url} alt={r.name} className="w-full h-full object-cover" onError={e => { e.currentTarget.style.display = 'none'; }}/>
+                        : <span className="text-white font-black text-xs">{r.name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()}</span>
+                      }
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-black text-sm leading-tight">{r.name}</p>
+                          <p className="text-[11px] text-gray-500 leading-tight">{r.role}</p>
+                          {r.company && <p className="text-[11px] text-green-700 font-bold">{r.company}</p>}
+                        </div>
+                        <div className="text-yellow-400 text-sm font-black flex-shrink-0">{'★'.repeat(r.rating)}</div>
+                      </div>
+                      <p className="text-xs text-gray-600 italic mt-2 line-clamp-2">"{r.quote}"</p>
+                    </div>
+
+                    {/* Delete */}
+                    <button
+                      onClick={() => deleteCelebReview(r.id)}
+                      className="absolute top-2 right-2 text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Trash2 size={16}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* --- NEW: EDIT ORDER MODAL --- */}
       {editingOrder && (

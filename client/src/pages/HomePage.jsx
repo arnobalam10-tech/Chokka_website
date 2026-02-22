@@ -9,6 +9,7 @@ import SyndicateShowcase from '../components/SyndicateShowcase';
 import TongShowcase from '../components/TongShowcase';
 import TextMarquee from '../components/TextMarquee';
 import CheckoutModal from '../components/CheckoutModal';
+import CelebrityReviews from '../components/CelebrityReviews';
 
 // Aggressive cache — 15 min TTL to cut Supabase egress
 const productsCache = { data: null, timestamp: 0 };
@@ -195,6 +196,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <CelebrityReviews />
 
       <footer className="bg-[#0a1510] text-[#f8f5e6] py-12 text-center border-t border-white/5">
         <img src="/logo.png" alt="CHOKKA" className="w-12 h-12 object-contain mx-auto mb-4 opacity-60" />
