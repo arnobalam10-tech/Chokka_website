@@ -12,7 +12,7 @@ const templateCache = {
   products: null,
   timestamp: 0
 };
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes — reduce Supabase egress
 
 // --- THIS LINE IS CRITICAL: 'export default' ---
 export default function GameTemplate({
@@ -127,9 +127,9 @@ export default function GameTemplate({
         </div>
         
         <div className="hidden md:flex items-center gap-8 font-bold text-sm uppercase tracking-widest">
-            <a href="#story" className="hover:opacity-60 transition-opacity">The Story</a>
-            <a href="#features" className="hover:opacity-60 transition-opacity">Cards</a>
-            <a href="#visuals" className="hover:opacity-60 transition-opacity">Visuals</a>
+            <button onClick={() => document.getElementById('story')?.scrollIntoView({ behavior: 'smooth' })} className="hover:opacity-60 transition-opacity">The Story</button>
+            <button onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })} className="hover:opacity-60 transition-opacity">Cards</button>
+            <button onClick={() => document.getElementById('visuals')?.scrollIntoView({ behavior: 'smooth' })} className="hover:opacity-60 transition-opacity">Visuals</button>
             <button 
                 onClick={() => setIsCheckoutOpen(true)}
                 className="px-6 py-2 border-2 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all flex items-center gap-2"

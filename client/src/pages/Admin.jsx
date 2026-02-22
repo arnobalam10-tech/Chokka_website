@@ -235,6 +235,31 @@ export default function Admin() {
   const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`${API_URL}/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
   const handleUploadAndSave = async (e) => { e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true); try { const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error; const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName); await fetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) }); alert("✅ Upload Successful!"); e.target.reset(); fetchGallery(); } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); } };
 
+  const handleCardUpload = async (e, cardType) => {
+    e.preventDefault();
+    const file = e.target.file_input.files[0];
+    if (!file) return alert("Select a file!");
+    setUploading(true);
+    try {
+      const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+      const { error } = await supabase.storage.from('product-images').upload(fileName, file);
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+      await fetch(`${API_URL}/api/gallery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_url: urlData.publicUrl, caption: cardType, product_id: contentSubTab })
+      });
+      alert("✅ Card image uploaded!");
+      e.target.reset();
+      fetchGallery();
+    } catch (error) {
+      alert("Upload Error: " + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // --- INVENTORY CRUD ---
   const createInventoryItem = async (e) => {
     e.preventDefault();
@@ -959,24 +984,111 @@ export default function Admin() {
         {activeTab === 'visuals' && (
             <div className="max-w-5xl">
                 <h2 className="text-3xl font-bold mb-6 text-chokka-dark uppercase tracking-tight">Product Visuals</h2>
-                <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
                     <button onClick={() => setContentSubTab(1)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
                     <button onClick={() => setContentSubTab(2)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
                     <button onClick={() => setContentSubTab(3)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
                 </div>
-                <form onSubmit={handleUploadAndSave} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-col md:flex-row gap-4 items-end bg-green-50">
-                    <div className="w-full"><label className="font-bold block text-sm mb-1">Select Photo</label><input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold w-full bg-white"/></div>
-                    <div className="w-full md:w-auto"><label className="font-bold block text-sm mb-1">Caption</label><input name="caption" type="text" placeholder="Detail Shot" className="border-2 border-black p-2 font-bold w-full md:w-48"/></div>
-                    <button disabled={uploading} className="bg-black text-white px-6 py-2.5 font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50 min-w-[140px] w-full md:w-auto justify-center">{uploading ? 'UPLOADING...' : <><Upload size={18}/> UPLOAD</>}</button>
-                </form>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                    {gallery.filter(img => (img.product_id || 1) === contentSubTab).map(img => (
-                        <div key={img.id} className="bg-white border-2 border-black p-2 relative group shadow-lg overflow-hidden">
-                            <img src={img.image_url} alt="Visual" loading="lazy" decoding="async" className="w-full h-48 object-cover border border-gray-200 bg-gray-100 transition-transform group-hover:scale-105"/>
-                            {img.caption && <div className="mt-2 font-bold text-[10px] text-center uppercase tracking-wider text-gray-600">{img.caption}</div>}
-                            <button onClick={() => deleteImage(img.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={16} /></button>
+
+                {/* === CARD IMAGES SECTION === */}
+                <div className="mb-12 bg-yellow-50 border-2 border-yellow-400 p-6 shadow-md">
+                  <h3 className="text-xl font-black uppercase tracking-tight mb-1 flex items-center gap-2">
+                    <ImageIcon size={22}/> Card Images
+                  </h3>
+                  <p className="text-xs text-gray-500 font-bold mb-6">These appear on the homepage showcase. Upload front &amp; back card images.</p>
+
+                  {/* Front Cards */}
+                  <div className="mb-8">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-black text-sm uppercase tracking-wider text-chokka-dark">Front Cards</h4>
+                      <span className="text-[10px] font-bold text-gray-400">
+                        {gallery.filter(img => img.product_id === contentSubTab && img.caption === 'card-front').length} uploaded
+                      </span>
+                    </div>
+                    <form onSubmit={(e) => handleCardUpload(e, 'card-front')} className="flex gap-3 items-end mb-4">
+                      <input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
+                      <button disabled={uploading} className="bg-chokka-dark text-white px-5 py-2.5 font-bold hover:bg-black flex items-center gap-2 disabled:opacity-50 whitespace-nowrap">
+                        {uploading ? '...' : <><Upload size={16}/> UPLOAD FRONT</>}
+                      </button>
+                    </form>
+                    <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                      {gallery.filter(img => img.product_id === contentSubTab && img.caption === 'card-front').map(img => (
+                        <div key={img.id} className="relative group bg-white border-2 border-gray-300 rounded-lg overflow-hidden shadow">
+                          <img src={img.image_url} alt="Front Card" loading="lazy" decoding="async" className="w-full h-32 object-cover"/>
+                          <button onClick={() => deleteImage(img.id)} className="absolute top-1 right-1 bg-red-600 text-white p-1.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={14}/></button>
                         </div>
-                    ))}
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Back Card */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-black text-sm uppercase tracking-wider text-chokka-dark">Back Card</h4>
+                      <span className="text-[10px] font-bold text-gray-400">
+                        {gallery.filter(img => img.product_id === contentSubTab && img.caption === 'card-back').length} uploaded
+                      </span>
+                    </div>
+                    <form onSubmit={(e) => handleCardUpload(e, 'card-back')} className="flex gap-3 items-end mb-4">
+                      <input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
+                      <button disabled={uploading} className="bg-chokka-dark text-white px-5 py-2.5 font-bold hover:bg-black flex items-center gap-2 disabled:opacity-50 whitespace-nowrap">
+                        {uploading ? '...' : <><Upload size={16}/> UPLOAD BACK</>}
+                      </button>
+                    </form>
+                    <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                      {gallery.filter(img => img.product_id === contentSubTab && img.caption === 'card-back').map(img => (
+                        <div key={img.id} className="relative group bg-white border-2 border-gray-300 rounded-lg overflow-hidden shadow">
+                          <img src={img.image_url} alt="Back Card" loading="lazy" decoding="async" className="w-full h-32 object-cover"/>
+                          <button onClick={() => deleteImage(img.id)} className="absolute top-1 right-1 bg-red-600 text-white p-1.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={14}/></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hero Image */}
+                  <div className="mt-8 pt-6 border-t-2 border-yellow-300">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-black text-sm uppercase tracking-wider text-chokka-dark">Hero Image</h4>
+                      <span className="text-[10px] font-bold text-gray-400">
+                        {gallery.filter(img => img.product_id === contentSubTab && img.caption === 'hero').length} uploaded
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mb-3">Appears as the card in the Hero section at the top of the homepage.</p>
+                    <form onSubmit={(e) => handleCardUpload(e, 'hero')} className="flex gap-3 items-end mb-4">
+                      <input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
+                      <button disabled={uploading} className="bg-chokka-dark text-white px-5 py-2.5 font-bold hover:bg-black flex items-center gap-2 disabled:opacity-50 whitespace-nowrap">
+                        {uploading ? '...' : <><Upload size={16}/> UPLOAD HERO</>}
+                      </button>
+                    </form>
+                    <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                      {gallery.filter(img => img.product_id === contentSubTab && img.caption === 'hero').map(img => (
+                        <div key={img.id} className="relative group bg-white border-2 border-gray-300 rounded-lg overflow-hidden shadow">
+                          <img src={img.image_url} alt="Hero" loading="lazy" decoding="async" className="w-full h-32 object-cover"/>
+                          <button onClick={() => deleteImage(img.id)} className="absolute top-1 right-1 bg-red-600 text-white p-1.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={14}/></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* === PRODUCT GALLERY SECTION (for Game Template pages) === */}
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tight mb-1">Product Gallery</h3>
+                  <p className="text-xs text-gray-500 font-bold mb-4">These appear on the game detail pages.</p>
+                  <form onSubmit={handleUploadAndSave} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-col md:flex-row gap-4 items-end bg-green-50">
+                      <div className="w-full"><label className="font-bold block text-sm mb-1">Select Photo</label><input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold w-full bg-white"/></div>
+                      <div className="w-full md:w-auto"><label className="font-bold block text-sm mb-1">Caption</label><input name="caption" type="text" placeholder="Detail Shot" className="border-2 border-black p-2 font-bold w-full md:w-48"/></div>
+                      <button disabled={uploading} className="bg-black text-white px-6 py-2.5 font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50 min-w-[140px] w-full md:w-auto justify-center">{uploading ? 'UPLOADING...' : <><Upload size={18}/> UPLOAD</>}</button>
+                  </form>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                      {gallery.filter(img => (img.product_id || 1) === contentSubTab && img.caption !== 'card-front' && img.caption !== 'card-back' && img.caption !== 'hero').map(img => (
+                          <div key={img.id} className="bg-white border-2 border-black p-2 relative group shadow-lg overflow-hidden">
+                              <img src={img.image_url} alt="Visual" loading="lazy" decoding="async" className="w-full h-48 object-cover border border-gray-200 bg-gray-100 transition-transform group-hover:scale-105"/>
+                              {img.caption && <div className="mt-2 font-bold text-[10px] text-center uppercase tracking-wider text-gray-600">{img.caption}</div>}
+                              <button onClick={() => deleteImage(img.id)} className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><Trash2 size={16} /></button>
+                          </div>
+                      ))}
+                  </div>
                 </div>
             </div>
         )}
