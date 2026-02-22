@@ -58,7 +58,7 @@ export default function HomePage() {
   }, []);
 
   const bundleImages = useMemo(
-    () => [{ image_url: '/cards/bundle/hero.webp' }],
+    () => [{ image_url: '/cards/bundle/bundle.webp' }],
     []
   );
 
