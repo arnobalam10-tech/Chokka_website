@@ -4,7 +4,7 @@ import { gsap, ScrollTrigger } from '../utils/gsapSetup';
 export default function HeroSection({ onShopClick, heroImages }) {
   const HERO_CARDS = [
     { image: heroImages?.syndicate || '/cards/syndicate/hero.png', alt: 'The Syndicate' },
-    { image: heroImages?.tong || '/cards/tong/hero.png', alt: 'Tong' },
+    { image: heroImages?.tong || '/cards/tong/hero.webp', alt: 'Tong' },
   ];
   const heroRef = useRef(null);
   const cardsWrapRef = useRef(null);

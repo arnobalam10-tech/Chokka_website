@@ -11,7 +11,6 @@ import TextMarquee from '../components/TextMarquee';
 import CheckoutModal from '../components/CheckoutModal';
 
 // Aggressive cache — 15 min TTL to cut Supabase egress
-const galleryCache = { data: null, timestamp: 0 };
 const productsCache = { data: null, timestamp: 0 };
 const CACHE_DURATION = 15 * 60 * 1000;
 
@@ -19,7 +18,6 @@ export default function HomePage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutProduct, setCheckoutProduct] = useState(null);
-  const [gallery, setGallery] = useState(galleryCache.data || []);
   const [products, setProducts] = useState(productsCache.data || []);
 
   // Fetch data — with aggressive caching
@@ -42,21 +40,6 @@ export default function HomePage() {
         })
         .catch(() => console.error('Error fetching products'));
     }
-
-    // Gallery
-    if (galleryCache.data && now - galleryCache.timestamp < CACHE_DURATION) {
-      setGallery(galleryCache.data);
-    } else {
-      fetch(`${API_URL}/api/gallery`)
-        .then((res) => res.json())
-        .then((data) => {
-          const galleryData = data || [];
-          galleryCache.data = galleryData;
-          galleryCache.timestamp = Date.now();
-          setGallery(galleryData);
-        })
-        .catch(() => console.error('Error fetching images'));
-    }
   }, []);
 
   // Derived data
@@ -65,35 +48,27 @@ export default function HomePage() {
   const bundleProduct = products.find((p) => p.id === 3) || { id: 3, title: 'Chokka Bundle', price: 0 };
 
   // Card images for homepage showcases
-  // Uses API card images (caption='card-front'), falls back to local /cards/ folder
+  // Hardcoded local WebP images for maximum speed
   const syndicateImages = useMemo(() => {
-    const api = gallery.filter((img) => img.product_id === 1 && img.caption === 'card-front');
-    if (api.length > 0) return api.slice(0, 5);
-    // Fallback: local images from public/cards/syndicate/
-    return Array.from({ length: 5 }, (_, i) => ({ image_url: `/cards/syndicate/front-${i + 1}.png` }));
-  }, [gallery]);
+    return Array.from({ length: 5 }, (_, i) => ({ image_url: `/cards/syndicate/front-${i + 1}.webp` }));
+  }, []);
 
   const tongImages = useMemo(() => {
-    const api = gallery.filter((img) => img.product_id === 2 && img.caption === 'card-front');
-    if (api.length > 0) return api.slice(0, 8);
-    // Fallback: local images from public/cards/tong/
-    return Array.from({ length: 8 }, (_, i) => ({ image_url: `/cards/tong/front-${i + 1}.png` }));
-  }, [gallery]);
+    return Array.from({ length: 8 }, (_, i) => ({ image_url: `/cards/tong/front-${i + 1}.webp` }));
+  }, []);
 
   const bundleImages = useMemo(
-    () => gallery.filter((img) => (img.product_id || 1) === 3 && img.caption !== 'card-front' && img.caption !== 'card-back' && img.caption !== 'hero').slice(0, 1),
-    [gallery]
+    () => [{ image_url: '/cards/bundle/hero.webp' }],
+    []
   );
 
-  // Hero card images — from gallery (caption='hero') with local fallback
+  // Hero card images — local WebP
   const heroImages = useMemo(() => {
-    const synHero = gallery.find((img) => img.product_id === 1 && img.caption === 'hero');
-    const tongHero = gallery.find((img) => img.product_id === 2 && img.caption === 'hero');
     return {
-      syndicate: synHero?.image_url || '/cards/syndicate/hero.png',
-      tong: tongHero?.image_url || '/cards/tong/hero.png',
+      syndicate: '/cards/syndicate/hero.webp',
+      tong: '/cards/tong/hero.webp',
     };
-  }, [gallery]);
+  }, []);
 
   const handleBuy = (product) => {
     setCheckoutProduct(product);
