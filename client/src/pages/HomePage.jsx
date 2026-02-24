@@ -175,6 +175,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <CelebrityReviews />
+
       {/* --- WHY CHOKKA --- */}
       <section className="bg-[#0f1f17] text-[#f8f5e6] py-16 md:py-20 px-4 relative overflow-hidden">
         <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
@@ -196,8 +198,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      <CelebrityReviews />
 
       <footer className="bg-[#0a1510] text-[#f8f5e6] py-12 text-center border-t border-white/5">
         <img src="/logo.png" alt="CHOKKA" className="w-12 h-12 object-contain mx-auto mb-4 opacity-60" />
