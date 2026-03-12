@@ -6,6 +6,7 @@ import { trackPageView } from './utils/metaPixel';
 // Page Imports
 import HomePage from './pages/HomePage.jsx';
 import GameTemplate from './pages/GameTemplate.jsx';
+import LandingPage from './pages/LandingPage.jsx';
 import Admin from './pages/Admin.jsx';
 import Login from './pages/Loginl.jsx';
 import ScrollToTop from './components/ScrollToTop.jsx';
@@ -31,7 +32,7 @@ const PageViewTracker = () => {
 // --- GAME DATA CONFIGURATION ---
 
 const SYNDICATE_DATA = {
-  gameId: 1, 
+  gameId: 1,
   title: "THE SYNDICATE",
   subtitle: "Trust No One. Betray Everyone. The Ultimate Game of Power & Deception.",
   tagline: "#1 Strategy Card Game in Bangladesh",
@@ -49,15 +50,15 @@ const SYNDICATE_DATA = {
     secondary: "#e8e4d0"
   },
   features: [
-    { title: "Bluff & Deceive", desc: "Don't have the cards? Lie! Claim you're the Police Commissioner. Just don't get caught.", icon: <ShieldAlert size={40} color="white"/> },
-    { title: "Fast Paced", desc: "No boring setup. Rounds last 15 minutes. Perfect for quick breaks or long game nights.", icon: <Zap size={40} color="white"/> },
-    { title: "Ruins Friendships", desc: "Designed to create chaos. Backstab your friends—all in good fun, of course.", icon: <Users size={40} color="#1a3325"/> }
+    { title: "Bluff & Deceive", desc: "Don't have the cards? Lie! Claim you're the Police Commissioner. Just don't get caught.", icon: <ShieldAlert size={40} color="white" /> },
+    { title: "Fast Paced", desc: "No boring setup. Rounds last 15 minutes. Perfect for quick breaks or long game nights.", icon: <Zap size={40} color="white" /> },
+    { title: "Ruins Friendships", desc: "Designed to create chaos. Backstab your friends—all in good fun, of course.", icon: <Users size={40} color="#1a3325" /> }
   ]
 };
 
 // --- CORRECTED TONG DATA (No Cockroaches!) ---
 const TONG_DATA = {
-  gameId: 2, 
+  gameId: 2,
   title: "TONG",
   subtitle: "Cha, Bon, Paan, Muri. Pass the cards, keep a straight face.",
   tagline: "The Desi Bluffing Game",
@@ -75,9 +76,9 @@ const TONG_DATA = {
     secondary: "#f4e4bc"
   },
   features: [
-    { title: "8 Desi Suits", desc: "Cha, Bon, Paan, Toast, Kola, Bakorkhani, Dry Cake, Muri. All your Tong favorites.", icon: <Coffee size={40} color="white"/> },
-    { title: "Call the Bluff", desc: "Look your friend in the eye. Are they lying? If you guess wrong, you take the card.", icon: <Search size={40} color="white"/> },
-    { title: "Don't Collect 4", desc: "The goal is survival. If you get stuck with 4 of the same item, you lose the round.", icon: <AlertTriangle size={40} color="#1a3325"/> }
+    { title: "8 Desi Suits", desc: "Cha, Bon, Paan, Toast, Kola, Bakorkhani, Dry Cake, Muri. All your Tong favorites.", icon: <Coffee size={40} color="white" /> },
+    { title: "Call the Bluff", desc: "Look your friend in the eye. Are they lying? If you guess wrong, you take the card.", icon: <Search size={40} color="white" /> },
+    { title: "Don't Collect 4", desc: "The goal is survival. If you get stuck with 4 of the same item, you lose the round.", icon: <AlertTriangle size={40} color="#1a3325" /> }
   ]
 };
 
@@ -91,26 +92,29 @@ function App() {
       <Routes>
         {/* 1. Public Website */}
         <Route path="/" element={<HomePage />} />
-        
-        {/* 2. Game Routes */}
-        <Route 
-          path="/syndicate" 
-          element={<GameTemplate {...SYNDICATE_DATA} />} 
+
+        {/* 2. Meta Ads Landing Page */}
+        <Route path="/landing" element={<LandingPage />} />
+
+        {/* 3. Game Routes */}
+        <Route
+          path="/syndicate"
+          element={<GameTemplate {...SYNDICATE_DATA} />}
         />
-        <Route 
-          path="/tong" 
-          element={<GameTemplate {...TONG_DATA} />} 
+        <Route
+          path="/tong"
+          element={<GameTemplate {...TONG_DATA} />}
         />
 
         {/* 3. Login & Admin */}
         <Route path="/login" element={<Login />} />
-        <Route 
-          path="/admin" 
+        <Route
+          path="/admin"
           element={
             <ProtectedRoute>
               <Admin />
             </ProtectedRoute>
-          } 
+          }
         />
       </Routes>
     </HashRouter>

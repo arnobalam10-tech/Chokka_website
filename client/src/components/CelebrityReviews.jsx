@@ -25,20 +25,20 @@ const FALLBACK = [
 
 // ─── Desktop carousel config (keyed by offset string) ────────────────────────
 const D_CFG = {
-  '0':  { xFactor: 0,    scale: 1.00, opacity: 1.00, blur: 0,   zIndex: 10 },
-  '1':  { xFactor: 230,  scale: 0.79, opacity: 0.55, blur: 2,   zIndex: 5  },
-  '-1': { xFactor: -230, scale: 0.79, opacity: 0.55, blur: 2,   zIndex: 5  },
-  '2':  { xFactor: 385,  scale: 0.60, opacity: 0.25, blur: 4,   zIndex: 2  },
-  '-2': { xFactor: -385, scale: 0.60, opacity: 0.25, blur: 4,   zIndex: 2  },
+  '0': { xFactor: 0, scale: 1.00, opacity: 1.00, blur: 0, zIndex: 10 },
+  '1': { xFactor: 230, scale: 0.79, opacity: 0.55, blur: 2, zIndex: 5 },
+  '-1': { xFactor: -230, scale: 0.79, opacity: 0.55, blur: 2, zIndex: 5 },
+  '2': { xFactor: 385, scale: 0.60, opacity: 0.25, blur: 4, zIndex: 2 },
+  '-2': { xFactor: -385, scale: 0.60, opacity: 0.25, blur: 4, zIndex: 2 },
 };
 
 // ─── Mobile carousel config — center card full, ±1 peek from edges ───────────
 const M_CFG = {
-  '0':  { xFactor: 0,    scale: 1.00, opacity: 1.00, blur: 0,   zIndex: 10 },
-  '1':  { xFactor: 220,  scale: 0.80, opacity: 0.40, blur: 2,   zIndex: 4  },
-  '-1': { xFactor: -220, scale: 0.80, opacity: 0.40, blur: 2,   zIndex: 4  },
-  '2':  { xFactor: 0,    scale: 0.60, opacity: 0,    blur: 0,   zIndex: 1  },
-  '-2': { xFactor: 0,    scale: 0.60, opacity: 0,    blur: 0,   zIndex: 1  },
+  '0': { xFactor: 0, scale: 1.00, opacity: 1.00, blur: 0, zIndex: 10 },
+  '1': { xFactor: 220, scale: 0.80, opacity: 0.40, blur: 2, zIndex: 4 },
+  '-1': { xFactor: -220, scale: 0.80, opacity: 0.40, blur: 2, zIndex: 4 },
+  '2': { xFactor: 0, scale: 0.60, opacity: 0, blur: 0, zIndex: 1 },
+  '-2': { xFactor: 0, scale: 0.60, opacity: 0, blur: 0, zIndex: 1 },
 };
 
 function getOffset(index, active, total) {
@@ -208,7 +208,7 @@ export default function CelebrityReviews() {
       {/* Section header */}
       <div className="text-center mb-14 px-4">
         <span className="inline-block text-[#2e8b57] font-bold tracking-[0.3em] uppercase text-sm mb-3">
-          Trusted By Leaders
+          ✅ Verified Celeb Reviews
         </span>
         <h2 className="text-4xl md:text-6xl font-black text-[#f8f5e6] uppercase leading-tight">
           What the <span className="text-[#2e8b57]">Famous</span> Say
@@ -253,9 +253,8 @@ export default function CelebrityReviews() {
       <div className="flex justify-center gap-2 mt-6">
         {reviews.map((_, i) => (
           <button key={i} onClick={() => setActive(i)} aria-label={`Review ${i + 1}`}
-            className={`h-2 rounded-full transition-all duration-300 ${
-              i === active ? 'bg-[#2e8b57] w-7' : 'bg-[#f8f5e6]/15 w-2 hover:bg-[#f8f5e6]/30'
-            }`}
+            className={`h-2 rounded-full transition-all duration-300 ${i === active ? 'bg-[#2e8b57] w-7' : 'bg-[#f8f5e6]/15 w-2 hover:bg-[#f8f5e6]/30'
+              }`}
           />
         ))}
       </div>
