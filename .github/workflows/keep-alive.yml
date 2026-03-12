@@ -3,7 +3,7 @@ name: Keep Chokka Alive
 on:
   schedule:
     # Runs every 14 minutes (Render sleeps after 15 mins of inactivity)
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allows you to run this manually from GitHub actions tab for testing
 
 jobs:
@@ -13,10 +13,7 @@ jobs:
       - name: Keep Chokka Stack Alive
         run: |
           echo "Pinging Frontend..."
-          curl -I https://chokka.shop
+          curl -L https://chokka.shop
           
-          echo "Pinging Backend Root..."
-          curl -I https://chokka-server.onrender.com
-          
-          echo "Pinging API Products Endpoint..."
-          curl -I https://chokka-server.onrender.com/api/products
+          echo "Pinging Backend /health..."
+          curl -L https://chokka-server.onrender.com/health

@@ -21,17 +21,17 @@ export default function HomePage() {
   const [checkoutProduct, setCheckoutProduct] = useState(null);
   const [products, setProducts] = useState(productsCache.data || []);
 
-  // Fetch data — with aggressive caching
+  // Fetch data — with aggressive caching and retry logic
   useEffect(() => {
     const API_URL = 'https://chokka-server.onrender.com';
     const now = Date.now();
 
-    // Products
-    if (productsCache.data && now - productsCache.timestamp < CACHE_DURATION) {
-      setProducts(productsCache.data);
-    } else {
+    const fetchProducts = (retries = 3, delay = 3000) => {
       fetch(`${API_URL}/api/products`)
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) throw new Error('Server starting...');
+          return res.json();
+        })
         .then((data) => {
           if (Array.isArray(data)) {
             productsCache.data = data;
@@ -39,7 +39,20 @@ export default function HomePage() {
             setProducts(data);
           }
         })
-        .catch(() => console.error('Error fetching products'));
+        .catch((err) => {
+          if (retries > 0) {
+            console.log(`Retrying fetch... (${retries} left)`);
+            setTimeout(() => fetchProducts(retries - 1, delay), delay);
+          } else {
+            console.error('Failed to fetch products after retries', err);
+          }
+        });
+    };
+
+    if (productsCache.data && now - productsCache.timestamp < CACHE_DURATION) {
+      setProducts(productsCache.data);
+    } else {
+      fetchProducts();
     }
   }, []);
 

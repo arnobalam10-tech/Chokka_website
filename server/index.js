@@ -21,6 +21,11 @@ app.use(cors({
 
 app.use(express.json());
 
+// --- HEALTH CHECK: Wakes up server quickly ---
+app.get('/health', (req, res) => {
+  res.send('Chokka Server is Live');
+});
+
 // Initialize Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
