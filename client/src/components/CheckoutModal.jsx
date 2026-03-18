@@ -161,7 +161,8 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
         trackPurchase({
           content_name: PRODUCT_NAMES[activeProduct.id] || activeProduct.title,
           content_ids: String(activeProduct.id),
-          value: TOTAL
+          value: TOTAL,
+          currency: 'BDT'
         });
         setStatus('success');
         setTimeout(() => {
