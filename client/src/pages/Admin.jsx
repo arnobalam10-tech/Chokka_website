@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3, RefreshCw, Menu, X, Boxes, Receipt, Wallet, LayoutDashboard, AlertTriangle, PackageCheck, Award } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 // --- CONFIGURATION ---
 const supabaseUrl = 'https://efijepzbnhnslljvpakc.supabase.co';
@@ -866,33 +867,7 @@ export default function Admin() {
         )}
 
         {activeTab === 'analytics' && (
-            <div>
-                <h2 className="text-3xl font-bold mb-8">SALES SUMMARY</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                    <div className="bg-white p-6 shadow-lg border-2 border-black">
-                        <div className="text-gray-500 font-bold mb-2 flex items-center gap-2"><Package/> Total Orders</div>
-                        <div className="text-4xl font-black">{stats.count}</div>
-                    </div>
-                    <div className="bg-white p-6 shadow-lg border-2 border-black">
-                        <div className="text-gray-500 font-bold mb-2 flex items-center gap-2"><TrendingUp/> Product Sales</div>
-                        <div className="text-4xl font-black text-blue-600">{stats.totalSales}৳</div>
-                    </div>
-                    <div className="bg-white p-6 shadow-lg border-2 border-black bg-green-50">
-                        <div className="text-gray-500 font-bold mb-2 flex items-center gap-2"><DollarSign/> Gross Profit</div>
-                        <div className="text-4xl font-black text-green-600">+{stats.grossProfit}৳</div>
-                    </div>
-                </div>
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><Calendar/> Order Volume (Last 7 Days)</h3>
-                <div className="bg-white p-8 shadow-lg border-2 border-black h-64 flex items-end justify-around gap-2">
-                    {stats.chartData.map((d, i) => (
-                        <div key={i} className="flex flex-col items-center w-full group">
-                            <div className="font-bold mb-2 opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</div>
-                            <div className="w-full max-w-[40px] bg-chokka-green hover:bg-chokka-dark transition-all rounded-t" style={{ height: `${d.count > 0 ? (d.count * 20) + 10 : 2}px` }}></div>
-                            <div className="text-xs font-bold mt-2 text-gray-500">{d.date}</div>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            <AnalyticsDashboard orders={orders} products={products} />
         )}
 
         {activeTab === 'orders' && (
