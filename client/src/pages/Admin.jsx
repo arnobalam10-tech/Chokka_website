@@ -421,6 +421,24 @@ export default function Admin() {
     return inventory.filter(item => item.category === inventorySubTab);
   };
 
+  // --- PRINT QUEUE: Tally pending orders by product type ---
+  const getPrintQueue = () => {
+    let syndicate = 0;
+    let tong = 0;
+    orders.filter(o => isPending(o.status)).forEach(o => {
+      const name = getProductName(o.product_id).toLowerCase();
+      if (name.includes('bundle')) {
+        syndicate += 1;
+        tong += 1;
+      } else if (name.includes('syndicate')) {
+        syndicate += 1;
+      } else if (name.includes('tong')) {
+        tong += 1;
+      }
+    });
+    return { syndicate, tong };
+  };
+
   const getExpenseTotals = () => {
     return expenses.reduce((acc, e) => ({
       print: acc.print + Number(e.print_cost || 0),
@@ -896,6 +914,37 @@ export default function Admin() {
                         <button key={tab} onClick={() => setOrderSubTab(tab)} className={`px-4 py-2 font-bold whitespace-nowrap rounded-t-lg transition-colors ${orderSubTab === tab ? 'bg-chokka-dark text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{tab}</button>
                     ))}
                 </div>
+
+                {/* --- PRINT QUEUE SUMMARY BANNER --- */}
+                {(() => {
+                  const pq = getPrintQueue();
+                  const total = pq.syndicate + pq.tong;
+                  return (
+                    <div className="mb-6 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 border-2 border-indigo-500 shadow-xl rounded-lg p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                      <div className="flex items-center gap-3 min-w-max">
+                        <span className="text-3xl select-none">🖨️</span>
+                        <div>
+                          <div className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">Print Queue</div>
+                          <div className="text-white font-black text-sm uppercase tracking-wider">Pending Orders</div>
+                        </div>
+                      </div>
+                      <div className="flex-1 flex flex-wrap gap-4 sm:justify-center">
+                        <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
+                          <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Syndicate</div>
+                          <div className="text-white font-black text-3xl leading-none">{pq.syndicate}</div>
+                        </div>
+                        <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
+                          <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Tong</div>
+                          <div className="text-white font-black text-3xl leading-none">{pq.tong}</div>
+                        </div>
+                      </div>
+                      <div className="bg-white/10 border border-white/20 rounded-lg px-5 py-3 text-center min-w-[100px] ml-auto">
+                        <div className="text-indigo-200 text-[10px] font-black uppercase tracking-widest mb-1">Total</div>
+                        <div className="text-yellow-300 font-black text-3xl leading-none">{total}</div>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
                     <table className="w-full text-left min-w-[800px]">
                         <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
