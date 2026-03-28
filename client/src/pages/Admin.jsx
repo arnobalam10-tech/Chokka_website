@@ -4,8 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 
 // --- CONFIGURATION ---
-const supabaseUrl = 'https://efijepzbnhnslljvpakc.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVmaWplcHpibmhuc2xsanZwYWtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1NzY4OTEsImV4cCI6MjA4NzE1Mjg5MX0.c6YEmjWZgPp2xifpAFYibtyaMkXHHYfULCsAvS5DpAA'; 
+const supabaseUrl = 'https://vbcvbruvqvbvkouiutdz.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZiY3ZicnV2cXZidmtvdWl1dGR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MDc0MjAsImV4cCI6MjA5MDI4MzQyMH0.CB8aj7-K7br2CN3MJgF7dbIUZfT4CMnLYjFVM4aZ5KQ';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- LIVE SERVER ---
