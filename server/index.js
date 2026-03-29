@@ -11,9 +11,9 @@ const port = process.env.PORT || 5000;
 app.use(cors({
   origin: [
     'http://localhost:5173',
-    'https://chokka-website.vercel.app', 
+    'https://chokka-website.vercel.app',
     'https://www.chokka-website.vercel.app',
-    'https://chokka.shop', 
+    'https://chokka.shop',
     'https://www.chokka.shop'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -22,26 +22,53 @@ app.use(cors({
 
 app.use(express.json());
 
-// --- SECURITY: Rate Limiting ---
-// Restrict each IP to 5 order attempts every 15 minutes
+// --- SECURITY: Stricter Rate Limiting for Orders (3 per 30 min per IP) ---
 const orderLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, 
-  message: { 
-    success: false, 
-    message: "Too many orders from this IP. Please try again in 15 minutes." 
+  windowMs: 30 * 60 * 1000, // 30 minutes
+  max: 3,
+  message: {
+    success: false,
+    message: "Too many orders from this IP. Please try again in 30 minutes."
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// --- EMERGENCY: Maintenance Mode Toggle ---
-// Set to true to IMMEDIATELY stop all new orders
-const MAINTENANCE_MODE = true; 
+// --- MAINTENANCE MODE: Controlled via env var, togglable at runtime ---
+let maintenanceMode = process.env.MAINTENANCE_MODE === 'true';
 
-// --- HEALTH CHECK: Wakes up server quickly ---
+// --- ADMIN AUTHENTICATION MIDDLEWARE ---
+const requireAdmin = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token || token !== process.env.ADMIN_SECRET) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  next();
+};
+
+// --- GLOBAL AUTH: Protect all non-public endpoints ---
+// Public endpoints are only the ones customers need. Everything else requires admin auth.
+app.use((req, res, next) => {
+  const publicRoutes = [
+    { method: null,   path: '/health' },
+    { method: 'POST', path: '/api/admin/login' },
+    { method: 'POST', path: '/api/create-order' },
+    { method: 'GET',  path: '/api/products' },
+    { method: 'POST', path: '/api/verify-coupon' },
+    { method: 'GET',  path: '/api/reviews' },
+    { method: 'GET',  path: '/api/gallery' },
+  ];
+  const isPublic = publicRoutes.some(r =>
+    (r.method === null || r.method === req.method) && r.path === req.path
+  );
+  if (isPublic) return next();
+  return requireAdmin(req, res, next);
+});
+
+// --- HEALTH CHECK ---
 app.get('/health', (req, res) => {
-  res.send(`Chokka Server is Live${MAINTENANCE_MODE ? ' (Maintenance Mode Active)' : ''}`);
+  res.send(`Chokka Server is Live${maintenanceMode ? ' (Maintenance Mode Active)' : ''}`);
 });
 
 // Initialize Supabase
@@ -49,33 +76,52 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Paste this near the top, after your constants
+// --- ADMIN: Login Endpoint (validates password, returns session token) ---
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (!password || password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ success: false, message: 'Invalid password' });
+  }
+  res.json({ success: true, token: process.env.ADMIN_SECRET });
+});
+
+// --- ADMIN: Toggle Maintenance Mode (no redeploy needed) ---
+app.post('/api/admin/maintenance', (req, res) => {
+  const { enabled } = req.body;
+  maintenanceMode = !!enabled;
+  console.log(`[Admin] Maintenance mode ${maintenanceMode ? 'ENABLED' : 'DISABLED'}`);
+  res.json({ success: true, maintenance: maintenanceMode });
+});
+
+app.get('/api/admin/maintenance', (req, res) => {
+  res.json({ maintenance: maintenanceMode });
+});
+
+// --- TELEGRAM NOTIFICATION (token from env, not hardcoded) ---
 const sendTelegramNotification = async (orderData) => {
-  const TELEGRAM_TOKEN = '8279878052:AAH6w2UeFBDUkMHGxXutA4UoYwv1yJFRIFw';
-  
-  // --- UPDATED: LIST OF ADMIN IDS ---
+  const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+  if (!TELEGRAM_TOKEN) return;
+
   const CHAT_IDS = [
     '5865440292', // You
     '5043710380'  // Jafar Wasi
   ];
 
-  // --- UPDATED: PRODUCT NAME MAPPING ---
   const productNames = {
     1: "The Syndicate",
     2: "TONG",
     3: "Chokka Bundle"
   };
   const gameTitle = productNames[orderData.product_id] || "Unknown Item";
-  
+
   const message = `💰 *NEW ORDER RECEIVED!* 💰\n\n` +
-                  `📦 *Item:* ${gameTitle}\n` + // Added Product Name here
+                  `📦 *Item:* ${gameTitle}\n` +
                   `👤 *Name:* ${orderData.customer_name}\n` +
                   `📞 *Phone:* ${orderData.customer_phone}\n` +
                   `🏙️ *City:* ${orderData.city}\n` +
                   `💵 *Total:* ${orderData.total_price} BDT\n\n` +
                   `👉 [Open Admin Panel](https://chokka.shop/admin)`;
 
-  // Loop through all IDs and send the message to everyone
   for (const chatId of CHAT_IDS) {
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -96,21 +142,18 @@ const sendTelegramNotification = async (orderData) => {
 // --- HELPER: Auto-deduct inventory on order ---
 const deductInventoryForOrder = async (product_id) => {
   try {
-    // Determine which products to deduct based on order type
     let productIds = [];
-    if (product_id === 1) productIds = [1]; // Syndicate only
-    else if (product_id === 2) productIds = [2]; // Tong only
-    else if (product_id === 3) productIds = [1, 2]; // Bundle = both
+    if (product_id === 1) productIds = [1];
+    else if (product_id === 2) productIds = [2];
+    else if (product_id === 3) productIds = [1, 2];
 
     for (const pid of productIds) {
-      // Deduct card_set, packet, and sticker for each product
       const itemTypes = ['card_set', 'packet', 'sticker'];
       for (const itemType of itemTypes) {
         await supabase.rpc('decrement_stock', {
           p_product_id: pid,
           p_item_type: itemType
         }).catch(() => {
-          // Fallback: manual decrement if RPC doesn't exist
           return supabase
             .from('inventory')
             .select('id, stock')
@@ -135,12 +178,12 @@ const deductInventoryForOrder = async (product_id) => {
 
 // --- 1. ORDERS ---
 
-// Receive New Order (Checkout)
+// Receive New Order (Checkout) - PUBLIC with rate limiting and strong validation
 app.post('/api/create-order', orderLimiter, async (req, res) => {
-  if (MAINTENANCE_MODE) {
-    return res.status(503).json({ 
-      success: false, 
-      message: "Order system is temporarily closed for security maintenance. Please try again later." 
+  if (maintenanceMode) {
+    return res.status(503).json({
+      success: false,
+      message: "Order system is temporarily closed for security maintenance. Please try again later."
     });
   }
 
@@ -148,32 +191,86 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
 
   // --- BOT PROTECTION: Honeypot Check ---
   if (hp_field) {
-    console.warn(`[BOT ALERT] Blocked order attempt with honeypot field filled: ${customer_name}`);
+    console.warn(`[BOT ALERT] Blocked order with honeypot field filled: ${customer_name}`);
     return res.status(403).json({ success: false, message: "Bot detected. Order rejected." });
+  }
+
+  // --- SERVER-SIDE VALIDATION ---
+  const nameStr    = String(customer_name || '').trim();
+  const phoneStr   = String(customer_phone || '').trim();
+  const addressStr = String(customer_address || '').trim();
+  const cityStr    = String(city || '').trim();
+  const productId  = Number(product_id);
+  const qty        = Number(quantity);
+  const price      = Number(total_price);
+
+  if (!nameStr || nameStr.length < 3 || nameStr.length > 100) {
+    return res.status(400).json({ success: false, message: "Please enter a valid name (3-100 characters)." });
+  }
+
+  // Bangladesh phone: starts with 01, 11 digits, valid operator prefix
+  if (!/^01[3-9]\d{8}$/.test(phoneStr)) {
+    return res.status(400).json({ success: false, message: "Please enter a valid Bangladeshi phone number (e.g. 017XXXXXXXX)." });
+  }
+
+  if (!addressStr || addressStr.length < 10) {
+    return res.status(400).json({ success: false, message: "Please enter a more detailed delivery address." });
+  }
+
+  if (!['Dhaka', 'Outside Dhaka'].includes(cityStr)) {
+    return res.status(400).json({ success: false, message: "Invalid city selection." });
+  }
+
+  if (![1, 2, 3].includes(productId)) {
+    return res.status(400).json({ success: false, message: "Invalid product selection." });
+  }
+
+  if (!Number.isInteger(qty) || qty < 1 || qty > 10) {
+    return res.status(400).json({ success: false, message: "Invalid quantity." });
+  }
+
+  if (isNaN(price) || price < 100 || price > 5000) {
+    return res.status(400).json({ success: false, message: "Invalid order amount." });
+  }
+
+  // --- DUPLICATE ORDER DETECTION: Block same phone within 10 minutes ---
+  try {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: recentOrders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('customer_phone', phoneStr)
+      .gte('created_at', tenMinutesAgo);
+
+    if (recentOrders && recentOrders.length > 0) {
+      console.warn(`[DUPLICATE BLOCKED] Phone: ${phoneStr}`);
+      return res.status(429).json({
+        success: false,
+        message: "An order was recently placed with this number. Please wait a few minutes before ordering again."
+      });
+    }
+  } catch (dupError) {
+    console.error("Duplicate check error:", dupError.message);
   }
 
   try {
     const { data, error } = await supabase
       .from('orders')
-      .insert([
-        {
-          customer_name,
-          customer_phone,
-          customer_address,
-          city,
-          product_id,
-          quantity,
-          total_price
-        }
-      ])
+      .insert([{
+        customer_name: nameStr,
+        customer_phone: phoneStr,
+        customer_address: addressStr,
+        city: cityStr,
+        product_id: productId,
+        quantity: qty,
+        total_price: price
+      }])
       .select();
 
     if (error) throw error;
 
-    // Auto-deduct inventory
-    await deductInventoryForOrder(product_id);
-
-    await sendTelegramNotification(req.body);
+    await deductInventoryForOrder(productId);
+    await sendTelegramNotification({ ...req.body, customer_name: nameStr, customer_phone: phoneStr, city: cityStr });
     res.json({ success: true, orderId: data[0].id });
 
   } catch (error) {
@@ -182,7 +279,7 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
   }
 });
 
-// Get All Orders (Admin Panel)
+// Get All Orders (Admin Panel) - PROTECTED by global middleware
 app.get('/api/orders', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -217,7 +314,7 @@ app.put('/api/orders/:id', async (req, res) => {
   }
 });
 
-// --- NEW ENDPOINT: Update Customer Details (Edit Modal) ---
+// Update Customer Details (Edit Modal)
 app.put('/api/orders/:id/update-details', async (req, res) => {
   const { id } = req.params;
   const { customer_name, customer_phone, customer_address, total_price } = req.body;
@@ -238,7 +335,7 @@ app.put('/api/orders/:id/update-details', async (req, res) => {
 
 // --- 2. PRODUCT SETTINGS (Prices & Fees) ---
 
-// Get ALL products (For Admin)
+// Get ALL products (also used by checkout modal - PUBLIC)
 app.get('/api/products', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -253,7 +350,7 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// Update specific product by ID
+// Update specific product by ID - PROTECTED
 app.put('/api/products/:id', async (req, res) => {
   const { id } = req.params;
   const { price, cost, stock, delivery_dhaka, delivery_outside } = req.body;
@@ -274,7 +371,7 @@ app.put('/api/products/:id', async (req, res) => {
 
 // --- 3. COUPONS ---
 
-// Get All Coupons
+// Get All Coupons - PROTECTED
 app.get('/api/coupons', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -289,7 +386,7 @@ app.get('/api/coupons', async (req, res) => {
   }
 });
 
-// Create New Coupon
+// Create New Coupon - PROTECTED
 app.post('/api/coupons', async (req, res) => {
   const { code, discount } = req.body;
 
@@ -306,7 +403,7 @@ app.post('/api/coupons', async (req, res) => {
   }
 });
 
-// --- 4. VERIFY COUPON ---
+// --- 4. VERIFY COUPON - PUBLIC (needed at checkout) ---
 app.post('/api/verify-coupon', async (req, res) => {
   const { code } = req.body;
   try {
@@ -319,7 +416,7 @@ app.post('/api/verify-coupon', async (req, res) => {
     if (error || !data) {
       return res.json({ success: false, message: 'Invalid Coupon' });
     }
-    
+
     if (!data.is_active) {
        return res.json({ success: false, message: 'Coupon Expired' });
     }
@@ -331,13 +428,15 @@ app.post('/api/verify-coupon', async (req, res) => {
 });
 
 // --- 5. MANAGE REVIEWS ---
+
+// Get reviews - PUBLIC (displayed on site)
 app.get('/api/reviews', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('reviews')
       .select('*')
       .order('created_at', { ascending: false });
-    
+
     if (error) throw error;
     res.json(data);
   } catch (error) {
@@ -345,18 +444,18 @@ app.get('/api/reviews', async (req, res) => {
   }
 });
 
-// [FIX] Now accepts product_id
+// Add review - PROTECTED (admin only)
 app.post('/api/reviews', async (req, res) => {
   const { customer_name, rating, comment, product_id } = req.body;
   try {
     const { data, error } = await supabase
       .from('reviews')
-      .insert([{ 
-        customer_name, 
-        rating, 
-        comment, 
+      .insert([{
+        customer_name,
+        rating,
+        comment,
         is_approved: true,
-        product_id: product_id || 1 // Default to Syndicate if missing
+        product_id: product_id || 1
       }])
       .select();
 
@@ -379,6 +478,8 @@ app.delete('/api/reviews/:id', async (req, res) => {
 });
 
 // --- 6. MANAGE GALLERY ---
+
+// Get gallery - PUBLIC (used by checkout modal and site)
 app.get('/api/gallery', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -393,16 +494,16 @@ app.get('/api/gallery', async (req, res) => {
   }
 });
 
-// [FIX] Now accepts product_id
+// Add gallery image - PROTECTED
 app.post('/api/gallery', async (req, res) => {
   const { image_url, caption, product_id } = req.body;
   try {
     const { data, error } = await supabase
       .from('gallery')
-      .insert([{ 
-        image_url, 
+      .insert([{
+        image_url,
         caption,
-        product_id: product_id || 1 // Default to Syndicate if missing
+        product_id: product_id || 1
       }])
       .select();
 
@@ -424,7 +525,7 @@ app.delete('/api/gallery/:id', async (req, res) => {
   }
 });
 
-// --- STEADFAST COURIER INTEGRATION ---
+// --- STEADFAST COURIER INTEGRATION - PROTECTED ---
 app.post('/api/steadfast/create', async (req, res) => {
   const { invoice, name, address, phone, amount, note } = req.body;
   const API_KEY = process.env.STEADFAST_API_KEY;
@@ -514,10 +615,9 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     const result = await response.json();
     if (result.status === 200 || Array.isArray(result)) {
         const ids = orders.map(o => o.id);
-        // Default to 'Unassigned' because Steadfast puts bulk orders in 'in_review'
         await supabase
           .from('orders')
-          .update({ status: 'Unassigned' }) 
+          .update({ status: 'Unassigned' })
           .in('id', ids);
         res.json({ success: true, count: orders.length, details: result });
     } else {
@@ -528,30 +628,26 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
   }
 });
 
-// --- FIXED: SYNC ALL STATUS (Uses tracking code endpoint) ---
+// --- SYNC ALL STATUS ---
 app.post('/api/steadfast/sync-all', async (req, res) => {
   const API_KEY = process.env.STEADFAST_API_KEY;
   const SECRET_KEY = process.env.STEADFAST_SECRET_KEY;
   const BASE_URL = 'https://portal.packzy.com/api/v1';
 
-  // Debug: Check if API keys exist
   if (!API_KEY || !SECRET_KEY) {
     return res.status(500).json({ success: false, error: "Missing Steadfast API credentials" });
   }
 
   try {
-    // 1. Get all orders with tracking codes from DB
     const { data: activeOrders, error } = await supabase
       .from('orders')
       .select('id, tracking_code, status')
       .not('tracking_code', 'is', null);
 
     if (error) {
-      console.error("Supabase Error:", error);
       return res.status(500).json({ success: false, error: "Database error: " + error.message });
     }
 
-    // Filter out delivered/cancelled orders in JS
     const ordersToSync = (activeOrders || []).filter(o =>
       o.tracking_code &&
       o.status !== 'Delivered' &&
@@ -568,7 +664,6 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
     const errors = [];
     const results = [];
 
-    // 2. Loop through each order and check status
     for (const order of ordersToSync) {
       try {
         const url = `${BASE_URL}/status_by_trackingcode/${order.tracking_code}`;
@@ -584,8 +679,6 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
         const result = await response.json();
         results.push({ orderId: order.id, tracking: order.tracking_code, response: result });
 
-        // Handle different API response structures
-        // Packzy/Steadfast may return delivery_status directly or nested in consignment
         let deliveryStatus = result.delivery_status ||
                              (result.consignment && result.consignment.delivery_status) ||
                              (result.data && result.data.delivery_status);
@@ -594,7 +687,6 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
           const sfStatus = deliveryStatus.toLowerCase();
           let newStatus = order.status;
 
-          // --- MAP STEADFAST STATUSES TO INTERNAL STATUSES ---
           if (sfStatus === 'in_review') newStatus = 'Unassigned';
           else if (sfStatus === 'pending') newStatus = 'Assigned';
           else if (sfStatus === 'delivered') newStatus = 'Delivered';
@@ -606,7 +698,6 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
           else if (sfStatus === 'cancelled_approval_pending') newStatus = 'Cancelled (Pending Approval)';
           else if (sfStatus === 'unknown_approval_pending') newStatus = 'Unknown (Pending Approval)';
 
-          // Update DB only if status changed
           if (newStatus !== order.status) {
             await supabase
               .from('orders')
@@ -625,7 +716,7 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
       updated: updatedCount,
       total: ordersToSync.length,
       errors: errors.length > 0 ? errors : undefined,
-      debug: results.slice(0, 3) // Show first 3 results for debugging
+      debug: results.slice(0, 3)
     });
 
   } catch (error) {
@@ -635,10 +726,9 @@ app.post('/api/steadfast/sync-all', async (req, res) => {
 });
 
 // =============================================
-// --- INVENTORY MANAGEMENT ---
+// --- INVENTORY MANAGEMENT - PROTECTED ---
 // =============================================
 
-// Get all inventory items
 app.get('/api/inventory', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -653,7 +743,6 @@ app.get('/api/inventory', async (req, res) => {
   }
 });
 
-// Get low stock items (for alerts)
 app.get('/api/inventory/low-stock', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -662,7 +751,6 @@ app.get('/api/inventory/low-stock', async (req, res) => {
 
     if (error) throw error;
 
-    // Filter items where stock <= reorder_level
     const lowStock = data.filter(item => item.stock <= item.reorder_level);
     res.json(lowStock);
   } catch (error) {
@@ -670,7 +758,6 @@ app.get('/api/inventory/low-stock', async (req, res) => {
   }
 });
 
-// Create inventory item
 app.post('/api/inventory', async (req, res) => {
   const { category, item_name, stock, reorder_level, product_id, item_type } = req.body;
   try {
@@ -686,7 +773,6 @@ app.post('/api/inventory', async (req, res) => {
   }
 });
 
-// Update inventory item
 app.put('/api/inventory/:id', async (req, res) => {
   const { id } = req.params;
   const { stock, reorder_level, item_name, category } = req.body;
@@ -704,7 +790,6 @@ app.put('/api/inventory/:id', async (req, res) => {
   }
 });
 
-// Delete inventory item
 app.delete('/api/inventory/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -716,9 +801,8 @@ app.delete('/api/inventory/:id', async (req, res) => {
   }
 });
 
-// Bulk update stock (for restocking)
 app.post('/api/inventory/restock', async (req, res) => {
-  const { items } = req.body; // Array of { id, add_quantity }
+  const { items } = req.body;
   try {
     for (const item of items) {
       const { data: current } = await supabase
@@ -741,10 +825,9 @@ app.post('/api/inventory/restock', async (req, res) => {
 });
 
 // =============================================
-// --- EXPENSES MANAGEMENT ---
+// --- EXPENSES MANAGEMENT - PROTECTED ---
 // =============================================
 
-// Get all expenses
 app.get('/api/expenses', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -759,7 +842,6 @@ app.get('/api/expenses', async (req, res) => {
   }
 });
 
-// Get expense totals
 app.get('/api/expenses/totals', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -782,7 +864,6 @@ app.get('/api/expenses/totals', async (req, res) => {
   }
 });
 
-// Create expense
 app.post('/api/expenses', async (req, res) => {
   const { date, print_cost, cutting_cost, packaging_cost, miscellaneous, particular, note } = req.body;
   try {
@@ -798,7 +879,6 @@ app.post('/api/expenses', async (req, res) => {
   }
 });
 
-// Update expense
 app.put('/api/expenses/:id', async (req, res) => {
   const { id } = req.params;
   const { date, print_cost, cutting_cost, packaging_cost, miscellaneous, particular, note } = req.body;
@@ -816,7 +896,6 @@ app.put('/api/expenses/:id', async (req, res) => {
   }
 });
 
-// Delete expense
 app.delete('/api/expenses/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -829,10 +908,9 @@ app.delete('/api/expenses/:id', async (req, res) => {
 });
 
 // =============================================
-// --- PAYOUTS MANAGEMENT ---
+// --- PAYOUTS MANAGEMENT - PROTECTED ---
 // =============================================
 
-// Get all payouts
 app.get('/api/payouts', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -847,7 +925,6 @@ app.get('/api/payouts', async (req, res) => {
   }
 });
 
-// Get payout total
 app.get('/api/payouts/total', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -863,7 +940,6 @@ app.get('/api/payouts/total', async (req, res) => {
   }
 });
 
-// Create payout
 app.post('/api/payouts', async (req, res) => {
   const { date, invoice_no, amount, note } = req.body;
   try {
@@ -879,7 +955,6 @@ app.post('/api/payouts', async (req, res) => {
   }
 });
 
-// Update payout
 app.put('/api/payouts/:id', async (req, res) => {
   const { id } = req.params;
   const { date, invoice_no, amount, note } = req.body;
@@ -897,7 +972,6 @@ app.put('/api/payouts/:id', async (req, res) => {
   }
 });
 
-// Delete payout
 app.delete('/api/payouts/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -910,41 +984,35 @@ app.delete('/api/payouts/:id', async (req, res) => {
 });
 
 // =============================================
-// --- DASHBOARD SUMMARY ---
+// --- DASHBOARD SUMMARY - PROTECTED ---
 // =============================================
 
-// Get summary stats for dashboard
 app.get('/api/dashboard/summary', async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    // Get today's orders
     const { data: todayOrders } = await supabase
       .from('orders')
       .select('id, total_price, status')
       .gte('created_at', today);
 
-    // Get pending orders
     const { data: pendingOrders } = await supabase
       .from('orders')
       .select('id')
       .or('status.is.null,status.eq.Pending,status.eq.Pickup Pending');
 
-    // Get delivered today
     const { data: deliveredToday } = await supabase
       .from('orders')
       .select('id')
       .eq('status', 'Delivered')
       .gte('created_at', today);
 
-    // Get low stock items (with error handling for missing table)
     let lowStock = [];
     try {
       const { data: inventory } = await supabase.from('inventory').select('*');
       lowStock = inventory ? inventory.filter(item => item.stock <= item.reorder_level) : [];
     } catch (e) { /* inventory table may not exist yet */ }
 
-    // Get total expenses (with error handling for missing table)
     let totalExpenses = 0;
     try {
       const { data: expenses } = await supabase.from('expenses').select('print_cost, cutting_cost, packaging_cost, miscellaneous');
@@ -952,7 +1020,6 @@ app.get('/api/dashboard/summary', async (req, res) => {
         sum + Number(e.print_cost || 0) + Number(e.cutting_cost || 0) + Number(e.packaging_cost || 0) + Number(e.miscellaneous || 0), 0) : 0;
     } catch (e) { /* expenses table may not exist yet */ }
 
-    // Get total payouts received (with error handling for missing table)
     let totalPayouts = 0;
     try {
       const { data: payouts } = await supabase.from('payouts').select('amount');

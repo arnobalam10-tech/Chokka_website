@@ -11,6 +11,25 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // --- LIVE SERVER ---
 const API_URL = 'https://chokka-server.onrender.com';
 
+// All admin API calls include the auth token. Redirects to login on 401.
+const adminFetch = async (url, opts = {}) => {
+  const token = localStorage.getItem('admin_token');
+  const { headers: existingHeaders, ...restOpts } = opts;
+  const response = await fetch(url, {
+    ...restOpts,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      ...(existingHeaders || {})
+    }
+  });
+  if (response.status === 401) {
+    localStorage.removeItem('admin_token');
+    window.location.href = '/login';
+    return null;
+  }
+  return response;
+};
+
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('summary'); 
   const [orderSubTab, setOrderSubTab] = useState('All'); 
@@ -56,17 +75,17 @@ export default function Admin() {
   }, []);
 
   // --- API CALLS ---
-  const fetchOrders = () => fetch(`${API_URL}/api/orders`).then(r => r.json()).then(setOrders);
-  const fetchProducts = () => fetch(`${API_URL}/api/products`).then(r => r.json()).then(setProducts);
-  const fetchCoupons = () => fetch(`${API_URL}/api/coupons`).then(r => r.json()).then(setCoupons);
-  const fetchReviews = () => fetch(`${API_URL}/api/reviews`).then(r => r.json()).then(setReviews);
-  const fetchGallery = () => fetch(`${API_URL}/api/gallery`).then(r => r.json()).then(setGallery);
+  const fetchOrders = () => adminFetch(`${API_URL}/api/orders`).then(r => r.json()).then(setOrders);
+  const fetchProducts = () => adminFetch(`${API_URL}/api/products`).then(r => r.json()).then(setProducts);
+  const fetchCoupons = () => adminFetch(`${API_URL}/api/coupons`).then(r => r.json()).then(setCoupons);
+  const fetchReviews = () => adminFetch(`${API_URL}/api/reviews`).then(r => r.json()).then(setReviews);
+  const fetchGallery = () => adminFetch(`${API_URL}/api/gallery`).then(r => r.json()).then(setGallery);
 
   // NEW: Fetch functions for Inventory, Expenses, Payouts, Summary
-  const fetchInventory = () => fetch(`${API_URL}/api/inventory`).then(r => r.json()).then(setInventory).catch(() => setInventory([]));
-  const fetchExpenses = () => fetch(`${API_URL}/api/expenses`).then(r => r.json()).then(setExpenses).catch(() => setExpenses([]));
-  const fetchPayouts = () => fetch(`${API_URL}/api/payouts`).then(r => r.json()).then(setPayouts).catch(() => setPayouts([]));
-  const fetchSummary = () => fetch(`${API_URL}/api/dashboard/summary`).then(r => r.json()).then(setSummary).catch(() => setSummary(null));
+  const fetchInventory = () => adminFetch(`${API_URL}/api/inventory`).then(r => r.json()).then(setInventory).catch(() => setInventory([]));
+  const fetchExpenses = () => adminFetch(`${API_URL}/api/expenses`).then(r => r.json()).then(setExpenses).catch(() => setExpenses([]));
+  const fetchPayouts = () => adminFetch(`${API_URL}/api/payouts`).then(r => r.json()).then(setPayouts).catch(() => setPayouts([]));
+  const fetchSummary = () => adminFetch(`${API_URL}/api/dashboard/summary`).then(r => r.json()).then(setSummary).catch(() => setSummary(null));
 
   // --- HELPER: Unified "Pending" Logic (Case Insensitive) ---
   const isPending = (status) => {
@@ -114,7 +133,7 @@ export default function Admin() {
     if(!confirm(`Send Order #${order.id} to Steadfast Courier?`)) return;
     setProcessingOrder(order.id);
     try {
-        const response = await fetch(`${API_URL}/api/steadfast/create`, {
+        const response = await adminFetch(`${API_URL}/api/steadfast/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -143,7 +162,7 @@ export default function Admin() {
     if (!confirm(`Are you sure you want to send ${pendingOrders.length} orders to Steadfast?`)) return;
     setIsBulkSending(true);
     try {
-        const response = await fetch(`${API_URL}/api/steadfast/bulk-create`, {
+        const response = await adminFetch(`${API_URL}/api/steadfast/bulk-create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ orders: pendingOrders })
@@ -161,7 +180,7 @@ export default function Admin() {
   const syncAllStatus = async () => {
     setIsSyncing(true);
     try {
-        const response = await fetch(`${API_URL}/api/steadfast/sync-all`, { method: 'POST' });
+        const response = await adminFetch(`${API_URL}/api/steadfast/sync-all`, { method: 'POST' });
         const result = await response.json();
         if (result.success) {
             alert(`✅ Synced! ${result.updated} orders updated.`);
@@ -177,7 +196,7 @@ export default function Admin() {
   };
 
   const updateOrderStatus = async (id, newStatus, trackingCode = null) => {
-    await fetch(`${API_URL}/api/orders/${id}/status`, {
+    await adminFetch(`${API_URL}/api/orders/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, tracking_code: trackingCode })
@@ -187,7 +206,7 @@ export default function Admin() {
 
   const deleteOrder = async (id) => {
     if(!confirm("⚠️ Delete this order permanently?")) return;
-    await fetch(`${API_URL}/api/orders/${id}`, { method: 'DELETE' });
+    await adminFetch(`${API_URL}/api/orders/${id}`, { method: 'DELETE' });
     fetchOrders();
   };
 
@@ -206,7 +225,7 @@ export default function Admin() {
     e.preventDefault();
     if (!editingOrder) return;
     try {
-        const response = await fetch(`${API_URL}/api/orders/${editingOrder.id}/update-details`, {
+        const response = await adminFetch(`${API_URL}/api/orders/${editingOrder.id}/update-details`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(editForm)
@@ -236,14 +255,14 @@ export default function Admin() {
   };
 
   // ... (Other update functions kept exactly as is)
-  const updateProduct = async (id, updatedData) => { const res = await fetch(`${API_URL}/api/products/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedData) }); if(res.ok) fetchProducts(); };
-  const createCoupon = async (e) => { e.preventDefault(); await fetch(`${API_URL}/api/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
+  const updateProduct = async (id, updatedData) => { const res = await adminFetch(`${API_URL}/api/products/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedData) }); if(res.ok) fetchProducts(); };
+  const createCoupon = async (e) => { e.preventDefault(); await adminFetch(`${API_URL}/api/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: e.target.code.value.toUpperCase(), discount: e.target.discount.value }) }); e.target.reset(); fetchCoupons(); };
   const updateCoupon = async (id, updatedData) => { const { error } = await supabase.from('coupons').update(updatedData).eq('id', id); if (!error) { fetchCoupons(); } else { alert("Error updating coupon"); } };
   const deleteCoupon = async (id) => { if(!confirm("Delete this coupon?")) return; const { error } = await supabase.from('coupons').delete().eq('id', id); if (!error) { fetchCoupons(); } else { alert("Error deleting coupon"); } };
-  const createReview = async (e) => { e.preventDefault(); await fetch(`${API_URL}/api/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_name: e.target.name.value, rating: e.target.rating.value, comment: e.target.comment.value, product_id: contentSubTab }) }); e.target.reset(); fetchReviews(); };
-  const deleteReview = async (id) => { if(!confirm("Delete?")) return; await fetch(`${API_URL}/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
-  const deleteImage = async (id) => { if(!confirm("Remove?")) return; await fetch(`${API_URL}/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
-  const handleUploadAndSave = async (e) => { e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true); try { const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error; const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName); await fetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) }); alert("✅ Upload Successful!"); e.target.reset(); fetchGallery(); } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); } };
+  const createReview = async (e) => { e.preventDefault(); await adminFetch(`${API_URL}/api/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_name: e.target.name.value, rating: e.target.rating.value, comment: e.target.comment.value, product_id: contentSubTab }) }); e.target.reset(); fetchReviews(); };
+  const deleteReview = async (id) => { if(!confirm("Delete?")) return; await adminFetch(`${API_URL}/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
+  const deleteImage = async (id) => { if(!confirm("Remove?")) return; await adminFetch(`${API_URL}/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
+  const handleUploadAndSave = async (e) => { e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true); try { const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error; const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName); await adminFetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) }); alert("✅ Upload Successful!"); e.target.reset(); fetchGallery(); } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); } };
 
   // --- CELEBRITY REVIEWS CRUD ---
   const fetchCelebReviews = async () => {
@@ -304,7 +323,7 @@ export default function Admin() {
       const { error } = await supabase.storage.from('product-images').upload(fileName, file);
       if (error) throw error;
       const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
-      await fetch(`${API_URL}/api/gallery`, {
+      await adminFetch(`${API_URL}/api/gallery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_url: urlData.publicUrl, caption: cardType, product_id: contentSubTab })
@@ -323,7 +342,7 @@ export default function Admin() {
   const createInventoryItem = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    await fetch(`${API_URL}/api/inventory`, {
+    await adminFetch(`${API_URL}/api/inventory`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -340,7 +359,7 @@ export default function Admin() {
   };
 
   const updateInventoryItem = async (id, updatedData) => {
-    await fetch(`${API_URL}/api/inventory/${id}`, {
+    await adminFetch(`${API_URL}/api/inventory/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedData)
@@ -351,7 +370,7 @@ export default function Admin() {
 
   const deleteInventoryItem = async (id) => {
     if (!confirm("Delete this inventory item?")) return;
-    await fetch(`${API_URL}/api/inventory/${id}`, { method: 'DELETE' });
+    await adminFetch(`${API_URL}/api/inventory/${id}`, { method: 'DELETE' });
     fetchInventory();
   };
 
@@ -359,7 +378,7 @@ export default function Admin() {
   const createExpense = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    await fetch(`${API_URL}/api/expenses`, {
+    await adminFetch(`${API_URL}/api/expenses`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -379,7 +398,7 @@ export default function Admin() {
 
   const deleteExpense = async (id) => {
     if (!confirm("Delete this expense?")) return;
-    await fetch(`${API_URL}/api/expenses/${id}`, { method: 'DELETE' });
+    await adminFetch(`${API_URL}/api/expenses/${id}`, { method: 'DELETE' });
     fetchExpenses();
     fetchSummary();
   };
@@ -388,7 +407,7 @@ export default function Admin() {
   const createPayout = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    await fetch(`${API_URL}/api/payouts`, {
+    await adminFetch(`${API_URL}/api/payouts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -405,7 +424,7 @@ export default function Admin() {
 
   const deletePayout = async (id) => {
     if (!confirm("Delete this payout?")) return;
-    await fetch(`${API_URL}/api/payouts/${id}`, { method: 'DELETE' });
+    await adminFetch(`${API_URL}/api/payouts/${id}`, { method: 'DELETE' });
     fetchPayouts();
     fetchSummary();
   };

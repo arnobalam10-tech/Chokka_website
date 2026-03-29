@@ -2,20 +2,37 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 
+const API_URL = 'https://chokka-server.onrender.com';
+
 export default function Login() {
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    
-    // SIMPLE SECURITY: We check if the password matches your secret
-    // In a real app, we would check this on the server, but this works for now.
-    if (password === '456852456852') { // <--- CHANGE THIS PASSWORD LATER
-      localStorage.setItem('admin_token', 'secret-access-granted');
-      navigate('/admin');
-    } else {
-      alert("ACCESS DENIED: Wrong Password");
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+
+      if (data.success && data.token) {
+        localStorage.setItem('admin_token', data.token);
+        navigate('/admin');
+      } else {
+        setError('ACCESS DENIED: Wrong Password');
+      }
+    } catch (err) {
+      setError('Server error. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -27,21 +44,28 @@ export default function Login() {
             <Lock className="text-chokka-green" size={32} />
           </div>
         </div>
-        
+
         <h2 className="text-2xl font-bold text-center mb-6 uppercase tracking-widest text-chokka-dark">
           Restricted Area
         </h2>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <input 
-            type="password" 
+          <input
+            type="password"
             placeholder="Enter Secret Code"
             className="p-3 border-2 border-chokka-dark font-bold text-center focus:outline-none focus:border-chokka-green"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            disabled={loading}
           />
-          <button className="bg-chokka-green text-chokka-dark font-bold py-3 hover:bg-white transition-colors border-2 border-transparent hover:border-chokka-dark">
-            UNLOCK SYSTEM
+          {error && (
+            <p className="text-red-600 font-bold text-center text-sm">{error}</p>
+          )}
+          <button
+            disabled={loading}
+            className="bg-chokka-green text-chokka-dark font-bold py-3 hover:bg-white transition-colors border-2 border-transparent hover:border-chokka-dark disabled:opacity-50"
+          >
+            {loading ? 'VERIFYING...' : 'UNLOCK SYSTEM'}
           </button>
         </form>
       </div>
