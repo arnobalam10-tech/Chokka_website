@@ -175,9 +175,12 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
             setCouponMsg('');
         }, 3000);
       } else {
-        alert("Error: " + data.error);
+        // Fix for "Error: undefined" - check for 'message' if 'error' is missing
+        const errorMsg = data.message || data.error || "Unknown error occurred";
+        alert("Error: " + errorMsg);
         setStatus('idle');
       }
+
     } catch (error) {
       alert("Server connection failed!");
       setStatus('idle');

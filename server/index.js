@@ -275,9 +275,14 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
 
   } catch (error) {
     console.error("Database Error:", error.message);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Server database error. Please contact support or try again later.",
+      error: error.message 
+    });
   }
 });
+
 
 // Get All Orders (Admin Panel) - PROTECTED by global middleware
 app.get('/api/orders', async (req, res) => {
@@ -310,9 +315,10 @@ app.put('/api/orders/:id', async (req, res) => {
     res.json({ success: true, data });
 
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: "Failed to update order status", error: error.message });
   }
 });
+
 
 // Update Customer Details (Edit Modal)
 app.put('/api/orders/:id/update-details', async (req, res) => {
@@ -329,9 +335,10 @@ app.put('/api/orders/:id/update-details', async (req, res) => {
     if (error) throw error;
     res.json({ success: true, data });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: "Failed to update customer details", error: error.message });
   }
 });
+
 
 // --- 2. PRODUCT SETTINGS (Prices & Fees) ---
 
@@ -346,9 +353,10 @@ app.get('/api/products', async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, message: "Failed to fetch products", error: error.message });
   }
 });
+
 
 // Update specific product by ID - PROTECTED
 app.put('/api/products/:id', async (req, res) => {
@@ -365,9 +373,10 @@ app.put('/api/products/:id', async (req, res) => {
     if (error) throw error;
     res.json({ success: true, data });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, message: "Failed to update product", error: error.message });
   }
 });
+
 
 // --- 3. COUPONS ---
 
@@ -382,9 +391,10 @@ app.get('/api/coupons', async (req, res) => {
     if (error) throw error;
     res.json(data);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, message: "Failed to fetch coupons", error: error.message });
   }
 });
+
 
 // Create New Coupon - PROTECTED
 app.post('/api/coupons', async (req, res) => {
@@ -399,9 +409,10 @@ app.post('/api/coupons', async (req, res) => {
     if (error) throw error;
     res.json({ success: true, data });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, message: "Failed to create coupon", error: error.message });
   }
 });
+
 
 // --- 4. VERIFY COUPON - PUBLIC (needed at checkout) ---
 app.post('/api/verify-coupon', async (req, res) => {
@@ -423,9 +434,10 @@ app.post('/api/verify-coupon', async (req, res) => {
 
     res.json({ success: true, discount: data.discount });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, message: "Error verifying coupon", error: error.message });
   }
 });
+
 
 // --- 5. MANAGE REVIEWS ---
 
