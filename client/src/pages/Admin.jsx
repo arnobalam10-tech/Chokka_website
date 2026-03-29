@@ -68,9 +68,13 @@ export default function Admin() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); 
 
-  // --- NEW: EDIT STATE ---
   const [editingOrder, setEditingOrder] = useState(null);
   const [editForm, setEditForm] = useState({ customer_name: '', customer_phone: '', customer_address: '', total_price: 0 });
+
+  // --- NEW: SEARCH & ADVANCED FILTER STATE ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [productFilter, setProductFilter] = useState('All');
+
 
   useEffect(() => {
     fetchOrders(); fetchProducts(); fetchCoupons(); fetchReviews(); fetchGallery();
@@ -245,18 +249,39 @@ export default function Admin() {
     } catch (error) { alert("Server error while updating."); }
   };
 
-  // --- UPDATED: FILTER LOGIC FOR NEW STATUSES ---
+  // --- UPDATED: FILTER LOGIC FOR NEW STATUSES, SEARCH, & PRODUCTS ---
   const getFilteredOrders = () => {
-    if (orderSubTab === 'All') return orders;
-    if (orderSubTab === 'Pickup Pending') return orders.filter(o => isPending(o.status));
-    if (orderSubTab === 'Unassigned') return orders.filter(o => o.status === 'Unassigned' || o.status === 'Steadfast_Posted');
-    if (orderSubTab === 'Assigned') return orders.filter(o => o.status === 'Assigned');
-    if (orderSubTab === 'Hold') return orders.filter(o => o.status === 'Hold');
-    if (orderSubTab === 'Dispatched') return orders.filter(o => o.status === 'Dispatched' || o.status === 'Shipped');
-    if (orderSubTab === 'Delivered') return orders.filter(o => o.status && o.status.includes('Delivered'));
-    if (orderSubTab === 'Cancelled') return orders.filter(o => o.status && o.status.includes('Cancelled'));
-    return orders;
+    return orders.filter(o => {
+      // 1. Status Filter (Tabs)
+      let statusMatch = true;
+      if (orderSubTab === 'Pickup Pending') statusMatch = isPending(o.status);
+      else if (orderSubTab === 'Unassigned') statusMatch = (o.status === 'Unassigned' || o.status === 'Steadfast_Posted');
+      else if (orderSubTab === 'Assigned') statusMatch = (o.status === 'Assigned');
+      else if (orderSubTab === 'Hold') statusMatch = (o.status === 'Hold');
+      else if (orderSubTab === 'Dispatched') statusMatch = (o.status === 'Dispatched' || o.status === 'Shipped');
+      else if (orderSubTab === 'Delivered') statusMatch = (o.status && o.status.includes('Delivered'));
+      else if (orderSubTab === 'Cancelled') statusMatch = (o.status && o.status.includes('Cancelled'));
+      else if (orderSubTab !== 'All') statusMatch = (o.status === orderSubTab);
+
+      if (!statusMatch) return false;
+
+      // 2. Product Filter
+      if (productFilter !== 'All' && String(o.product_id) !== String(productFilter)) {
+        return false;
+      }
+
+      // 3. Search Filter (Name or Phone)
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const nameMatch = o.customer_name?.toLowerCase().includes(term);
+        const phoneMatch = o.customer_phone?.includes(term);
+        if (!nameMatch && !phoneMatch) return false;
+      }
+
+      return true;
+    });
   };
+
 
   // ... (Other update functions kept exactly as is)
   const updateProduct = async (id, updatedData) => { const res = await adminFetch(`${API_URL}/api/products/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedData) }); if(res.ok) fetchProducts(); };
@@ -954,11 +979,51 @@ export default function Admin() {
                     </div>
                 </div>
                 {/* --- UPDATED: NEW TABS FOR STEADFAST STATUSES --- */}
-                <div className="flex gap-2 mb-6 border-b-2 border-gray-300 pb-2 overflow-x-auto">
+                <div className="flex gap-2 mb-4 border-b-2 border-gray-300 pb-2 overflow-x-auto">
                     {['All', 'Pickup Pending', 'Unassigned', 'Assigned', 'Dispatched', 'Hold', 'Delivered', 'Cancelled'].map(tab => (
                         <button key={tab} onClick={() => setOrderSubTab(tab)} className={`px-4 py-2 font-bold whitespace-nowrap rounded-t-lg transition-colors ${orderSubTab === tab ? 'bg-chokka-dark text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>{tab}</button>
                     ))}
                 </div>
+
+                {/* --- NEW: SEARCH & PRODUCT FILTER BAR --- */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6 bg-white p-4 border-2 border-black shadow-md">
+                    <div className="flex-1 relative">
+                        <input 
+                            type="text" 
+                            placeholder="Search by Name or Phone..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 font-bold focus:border-chokka-dark outline-none transition-colors"
+                        />
+                        <div className="absolute left-3 top-2.5 text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        </div>
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 text-gray-400 hover:text-black">
+                                <X size={18}/>
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs uppercase text-gray-500 whitespace-nowrap">Filter by Game:</span>
+                        <select 
+                            value={productFilter}
+                            onChange={(e) => setProductFilter(e.target.value)}
+                            className="border-2 border-gray-300 p-2 font-bold bg-white focus:border-chokka-dark outline-none min-w-[150px]"
+                        >
+                            <option value="All">All Games</option>
+                            {products.map(p => (
+                                <option key={p.id} value={p.id}>{p.title}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-2 border-l-0 md:border-l-2 border-gray-200 pl-0 md:pl-4">
+                        <span className="font-bold text-xs text-chokka-dark">
+                            FOUND: <span className="bg-chokka-green px-2 py-0.5 text-sm">{getFilteredOrders().length}</span>
+                        </span>
+                    </div>
+                </div>
+
 
                 {/* --- PRINT QUEUE SUMMARY BANNER --- */}
                 {(() => {
