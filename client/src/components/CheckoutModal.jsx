@@ -19,7 +19,8 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
     email: '',
     address: '',
     city: 'Dhaka',
-    couponCode: ''
+    couponCode: '',
+    hp_field: '' // Honeypot field for bot detection
   });
   
   // The product currently being purchased (can be swapped to Bundle)
@@ -152,7 +153,8 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
           city: formData.city,
           product_id: activeProduct.id, // Sends the correct ID (1, 2, or 3)
           quantity: 1,
-          total_price: TOTAL
+          total_price: TOTAL,
+          hp_field: formData.hp_field // Included for bot detection
         })
       });
       const data = await response.json();
@@ -242,6 +244,18 @@ export default function CheckoutModal({ isOpen, onClose, product }) {
                 )}
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-2">
+                  {/* Honeypot field - invisible to humans */}
+                  <div style={{ display: 'none' }} aria-hidden="true">
+                    <input 
+                      type="text" 
+                      name="hp_field" 
+                      tabIndex="-1" 
+                      autoComplete="off" 
+                      value={formData.hp_field} 
+                      onChange={e => setFormData({...formData, hp_field: e.target.value})}
+                    />
+                  </div>
+
                   <input required type="text" className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold placeholder:text-gray-400 focus:outline-none focus:border-[#2e8b57]" placeholder="Full Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}/>
                   <input required type="tel" className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold placeholder:text-gray-400 focus:outline-none focus:border-[#2e8b57]" placeholder="Phone Number (017...)" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})}/>
                   <input type="email" className="w-full bg-white border-2 border-[#1a3325] p-3 font-bold placeholder:text-gray-400 focus:outline-none focus:border-[#2e8b57]" placeholder="Email (Optional)" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})}/>

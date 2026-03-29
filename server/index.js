@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -21,9 +22,26 @@ app.use(cors({
 
 app.use(express.json());
 
+// --- SECURITY: Rate Limiting ---
+// Restrict each IP to 5 order attempts every 15 minutes
+const orderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, 
+  message: { 
+    success: false, 
+    message: "Too many orders from this IP. Please try again in 15 minutes." 
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// --- EMERGENCY: Maintenance Mode Toggle ---
+// Set to true to IMMEDIATELY stop all new orders
+const MAINTENANCE_MODE = true; 
+
 // --- HEALTH CHECK: Wakes up server quickly ---
 app.get('/health', (req, res) => {
-  res.send('Chokka Server is Live');
+  res.send(`Chokka Server is Live${MAINTENANCE_MODE ? ' (Maintenance Mode Active)' : ''}`);
 });
 
 // Initialize Supabase
@@ -118,8 +136,21 @@ const deductInventoryForOrder = async (product_id) => {
 // --- 1. ORDERS ---
 
 // Receive New Order (Checkout)
-app.post('/api/create-order', async (req, res) => {
-  const { customer_name, customer_phone, customer_address, city, product_id, quantity, total_price } = req.body;
+app.post('/api/create-order', orderLimiter, async (req, res) => {
+  if (MAINTENANCE_MODE) {
+    return res.status(503).json({ 
+      success: false, 
+      message: "Order system is temporarily closed for security maintenance. Please try again later." 
+    });
+  }
+
+  const { customer_name, customer_phone, customer_address, city, product_id, quantity, total_price, hp_field } = req.body;
+
+  // --- BOT PROTECTION: Honeypot Check ---
+  if (hp_field) {
+    console.warn(`[BOT ALERT] Blocked order attempt with honeypot field filled: ${customer_name}`);
+    return res.status(403).json({ success: false, message: "Bot detected. Order rejected." });
+  }
 
   try {
     const { data, error } = await supabase
