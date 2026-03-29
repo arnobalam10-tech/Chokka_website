@@ -56,6 +56,10 @@ export default function Admin() {
   const [celebImagePreview, setCelebImagePreview] = useState('');
   const [celebUploading, setCelebUploading] = useState(false);
   const [showCelebSQL, setShowCelebSQL] = useState(false);
+  const [editingCeleb, setEditingCeleb] = useState(null);
+  const [celebEditForm, setCelebEditForm] = useState({ name: '', role: '', company: '', rating: 5, quote: '' });
+  const [celebEditImagePreview, setCelebEditImagePreview] = useState('');
+  const [celebEditImageFile, setCelebEditImageFile] = useState(null);
 
   // UI State
   const [uploading, setUploading] = useState(false);
@@ -262,7 +266,7 @@ export default function Admin() {
   const createReview = async (e) => { e.preventDefault(); await adminFetch(`${API_URL}/api/reviews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customer_name: e.target.name.value, rating: e.target.rating.value, comment: e.target.comment.value, product_id: contentSubTab }) }); e.target.reset(); fetchReviews(); };
   const deleteReview = async (id) => { if(!confirm("Delete?")) return; await adminFetch(`${API_URL}/api/reviews/${id}`, { method: 'DELETE' }); fetchReviews(); };
   const deleteImage = async (id) => { if(!confirm("Remove?")) return; await adminFetch(`${API_URL}/api/gallery/${id}`, { method: 'DELETE' }); fetchGallery(); };
-  const handleUploadAndSave = async (e) => { e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true); try { const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product-images').upload(fileName, file); if (error) throw error; const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName); await adminFetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) }); alert("✅ Upload Successful!"); e.target.reset(); fetchGallery(); } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); } };
+  const handleUploadAndSave = async (e) => { e.preventDefault(); const file = e.target.file_input.files[0]; const caption = e.target.caption.value; if (!file) return alert("Select a file!"); setUploading(true); try { const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`; const { error } = await supabase.storage.from('product_photos').upload(fileName, file); if (error) throw error; const { data: urlData } = supabase.storage.from('product_photos').getPublicUrl(fileName); await adminFetch(`${API_URL}/api/gallery`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ image_url: urlData.publicUrl, caption: caption, product_id: contentSubTab }) }); alert("✅ Upload Successful!"); e.target.reset(); fetchGallery(); } catch (error) { alert("Upload Error: " + error.message); } finally { setUploading(false); } };
 
   // --- CELEBRITY REVIEWS CRUD ---
   const fetchCelebReviews = async () => {
@@ -279,9 +283,9 @@ export default function Admin() {
       if (celebImageFile) {
         const ext = celebImageFile.name.split('.').pop();
         const fileName = `celebrities/${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from('product-images').upload(fileName, celebImageFile);
+        const { error: uploadError } = await supabase.storage.from('product_photos').upload(fileName, celebImageFile);
         if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+        const { data: urlData } = supabase.storage.from('product_photos').getPublicUrl(fileName);
         imageUrl = urlData.publicUrl;
       }
       const { error } = await supabase.from('celebrity_reviews').insert({ ...celebForm, image_url: imageUrl });
@@ -298,19 +302,66 @@ export default function Admin() {
     }
   };
 
+  const updateCelebReview = async (e) => {
+    e.preventDefault();
+    if (!celebEditForm.name || !celebEditForm.quote) return alert('Name and quote are required.');
+    setCelebUploading(true);
+    try {
+      let imageUrl = editingCeleb.image_url;
+      if (celebEditImageFile) {
+        const ext = celebEditImageFile.name.split('.').pop();
+        const fileName = `celebrities/${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from('product_photos').upload(fileName, celebEditImageFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from('product_photos').getPublicUrl(fileName);
+        imageUrl = urlData.publicUrl;
+      }
+      const { error } = await supabase.from('celebrity_reviews').update({ ...celebEditForm, image_url: imageUrl }).eq('id', editingCeleb.id);
+      if (error) throw error;
+      setEditingCeleb(null);
+      setCelebEditImageFile(null);
+      setCelebEditImagePreview('');
+      fetchCelebReviews();
+      alert('✅ Celebrity review updated!');
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      setCelebUploading(false);
+    }
+  };
+
   const deleteCelebReview = async (id) => {
     if (!confirm('Delete this celebrity review?')) return;
     await supabase.from('celebrity_reviews').delete().eq('id', id);
     fetchCelebReviews();
   };
 
-  const handleCelebImageChange = (e) => {
+  const handleCelebImageChange = (e, isEdit = false) => {
     const file = e.target.files[0];
     if (!file) return;
-    setCelebImageFile(file);
-    const reader = new FileReader();
-    reader.onload = ev => setCelebImagePreview(ev.target.result);
-    reader.readAsDataURL(file);
+    if (isEdit) {
+      setCelebEditImageFile(file);
+      const reader = new FileReader();
+      reader.onload = ev => setCelebEditImagePreview(ev.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      setCelebImageFile(file);
+      const reader = new FileReader();
+      reader.onload = ev => setCelebImagePreview(ev.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const openCelebEditModal = (celeb) => {
+    setEditingCeleb(celeb);
+    setCelebEditForm({
+      name: celeb.name,
+      role: celeb.role,
+      company: celeb.company,
+      rating: celeb.rating,
+      quote: celeb.quote
+    });
+    setCelebEditImagePreview(celeb.image_url);
   };
 
   const handleCardUpload = async (e, cardType) => {
@@ -320,9 +371,9 @@ export default function Admin() {
     setUploading(true);
     try {
       const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-      const { error } = await supabase.storage.from('product-images').upload(fileName, file);
+      const { error } = await supabase.storage.from('product_photos').upload(fileName, file);
       if (error) throw error;
-      const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage.from('product_photos').getPublicUrl(fileName);
       await adminFetch(`${API_URL}/api/gallery`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1108,7 +1159,7 @@ export default function Admin() {
                       </span>
                     </div>
                     <form onSubmit={(e) => handleCardUpload(e, 'card-front')} className="flex gap-3 items-end mb-4">
-                      <input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
+                      <input name="file_input" required type="file" accept="image/webp,image/jpeg,image/png" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
                       <button disabled={uploading} className="bg-chokka-dark text-white px-5 py-2.5 font-bold hover:bg-black flex items-center gap-2 disabled:opacity-50 whitespace-nowrap">
                         {uploading ? '...' : <><Upload size={16}/> UPLOAD FRONT</>}
                       </button>
@@ -1132,7 +1183,7 @@ export default function Admin() {
                       </span>
                     </div>
                     <form onSubmit={(e) => handleCardUpload(e, 'card-back')} className="flex gap-3 items-end mb-4">
-                      <input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
+                      <input name="file_input" required type="file" accept="image/webp,image/jpeg,image/png" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
                       <button disabled={uploading} className="bg-chokka-dark text-white px-5 py-2.5 font-bold hover:bg-black flex items-center gap-2 disabled:opacity-50 whitespace-nowrap">
                         {uploading ? '...' : <><Upload size={16}/> UPLOAD BACK</>}
                       </button>
@@ -1157,7 +1208,7 @@ export default function Admin() {
                     </div>
                     <p className="text-[10px] text-gray-400 mb-3">Appears as the card in the Hero section at the top of the homepage.</p>
                     <form onSubmit={(e) => handleCardUpload(e, 'hero')} className="flex gap-3 items-end mb-4">
-                      <input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
+                      <input name="file_input" required type="file" accept="image/webp,image/jpeg,image/png" className="border-2 border-black p-2 font-bold bg-white flex-1"/>
                       <button disabled={uploading} className="bg-chokka-dark text-white px-5 py-2.5 font-bold hover:bg-black flex items-center gap-2 disabled:opacity-50 whitespace-nowrap">
                         {uploading ? '...' : <><Upload size={16}/> UPLOAD HERO</>}
                       </button>
@@ -1178,7 +1229,7 @@ export default function Admin() {
                   <h3 className="text-xl font-black uppercase tracking-tight mb-1">Product Gallery</h3>
                   <p className="text-xs text-gray-500 font-bold mb-4">These appear on the game detail pages.</p>
                   <form onSubmit={handleUploadAndSave} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex flex-col md:flex-row gap-4 items-end bg-green-50">
-                      <div className="w-full"><label className="font-bold block text-sm mb-1">Select Photo</label><input name="file_input" required type="file" accept="image/*" className="border-2 border-black p-2 font-bold w-full bg-white"/></div>
+                      <div className="w-full"><label className="font-bold block text-sm mb-1">Select Photo</label><input name="file_input" required type="file" accept="image/webp,image/jpeg,image/png" className="border-2 border-black p-2 font-bold w-full bg-white"/></div>
                       <div className="w-full md:w-auto"><label className="font-bold block text-sm mb-1">Caption</label><input name="caption" type="text" placeholder="Detail Shot" className="border-2 border-black p-2 font-bold w-full md:w-48"/></div>
                       <button disabled={uploading} className="bg-black text-white px-6 py-2.5 font-bold hover:bg-gray-800 flex items-center gap-2 disabled:opacity-50 min-w-[140px] w-full md:w-auto justify-center">{uploading ? 'UPLOADING...' : <><Upload size={18}/> UPLOAD</>}</button>
                   </form>
@@ -1372,18 +1423,136 @@ CREATE POLICY "Anon delete" ON celebrity_reviews FOR DELETE USING (true);`}</pre
                       <p className="text-xs text-gray-600 italic mt-2 line-clamp-2">"{r.quote}"</p>
                     </div>
 
-                    {/* Delete */}
-                    <button
-                      onClick={() => deleteCelebReview(r.id)}
-                      className="absolute top-2 right-2 text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      <Trash2 size={16}/>
-                    </button>
+                    {/* Actions */}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={() => openCelebEditModal(r)}
+                        className="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1.5 rounded"
+                      >
+                        <Edit3 size={16}/>
+                      </button>
+                      <button
+                        onClick={() => deleteCelebReview(r.id)}
+                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded"
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
+          {/* Edit Celebrity Modal */}
+          {editingCeleb && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+              <div className="bg-white border-4 border-chokka-dark shadow-2xl p-6 w-full max-w-xl relative animate-in fade-in zoom-in duration-300">
+                <button onClick={() => setEditingCeleb(null)} className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors">
+                  <X size={28}/>
+                </button>
+                
+                <h3 className="text-2xl font-black uppercase tracking-tight mb-6 border-b-4 border-chokka-green pb-2 inline-block">
+                  Edit Celebrity Review
+                </h3>
+
+                <form onSubmit={updateCelebReview} className="space-y-4">
+                  {/* Photo Edit */}
+                  <div className="flex items-center gap-6 bg-gray-50 p-4 border-2 border-dashed border-gray-200">
+                    <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg flex-shrink-0 bg-green-900 flex items-center justify-center">
+                      {celebEditImagePreview 
+                        ? <img src={celebEditImagePreview} alt="preview" className="w-full h-full object-cover"/>
+                        : <span className="text-white font-black text-xl">{celebEditForm.name?.[0]?.toUpperCase()}</span>
+                      }
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-black uppercase text-gray-500 mb-1">Update Photo (Optional)</label>
+                      <input 
+                        type="file" 
+                        accept="image/webp,image/jpeg,image/png" 
+                        onChange={(e) => handleCelebImageChange(e, true)}
+                        className="text-xs font-bold w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-black uppercase mb-1">Name</label>
+                      <input 
+                        required 
+                        className="w-full border-2 border-gray-200 p-2 font-bold focus:border-chokka-dark outline-none transition-colors"
+                        value={celebEditForm.name}
+                        onChange={e => setCelebEditForm({...celebEditForm, name: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-black uppercase mb-1">Role</label>
+                      <input 
+                        required 
+                        className="w-full border-2 border-gray-200 p-2 font-bold focus:border-chokka-dark outline-none transition-colors"
+                        value={celebEditForm.role}
+                        onChange={e => setCelebEditForm({...celebEditForm, role: e.target.value})}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase mb-1">Company</label>
+                    <input 
+                      className="w-full border-2 border-gray-200 p-2 font-bold focus:border-chokka-dark outline-none transition-colors"
+                      value={celebEditForm.company}
+                      onChange={e => setCelebEditForm({...celebEditForm, company: e.target.value})}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase mb-2">Rating</label>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setCelebEditForm(f => ({ ...f, rating: n }))}
+                          className={`text-2xl transition-transform hover:scale-110 ${n <= celebEditForm.rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase mb-1">Quote</label>
+                    <textarea 
+                      required 
+                      rows={3}
+                      className="w-full border-2 border-gray-200 p-2 font-bold focus:border-chokka-dark outline-none transition-colors resize-none"
+                      value={celebEditForm.quote}
+                      onChange={e => setCelebEditForm({...celebEditForm, quote: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="submit"
+                      disabled={celebUploading}
+                      className="flex-1 bg-chokka-dark text-white font-black py-4 uppercase tracking-widest hover:bg-black transition-colors disabled:opacity-50"
+                    >
+                      {celebUploading ? 'SAVING...' : 'SAVE CHANGES'}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setEditingCeleb(null)}
+                      className="px-6 bg-gray-100 text-gray-500 font-black hover:bg-gray-200 transition-colors"
+                    >
+                      CANCEL
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
