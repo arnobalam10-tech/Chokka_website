@@ -104,7 +104,8 @@ const sendTelegramNotification = async (orderData) => {
 
   const CHAT_IDS = [
     '5865440292', // You
-    '5043710380'  // Jafar Wasi
+    '5043710380', // Jafar Wasi
+    '8033841967'  // Yasir
   ];
 
   const productNames = {
