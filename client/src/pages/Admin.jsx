@@ -203,13 +203,17 @@ export default function Admin() {
     }
   };
 
-  const updateOrderStatus = async (id, newStatus, trackingCode = null) => {
+  const updateOrderData = async (id, data) => {
     await adminFetch(`${API_URL}/api/orders/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, tracking_code: trackingCode })
+        body: JSON.stringify(data)
     });
     fetchOrders();
+  };
+
+  const updateOrderStatus = (id, newStatus, trackingCode = null) => {
+    updateOrderData(id, { status: newStatus, tracking_code: trackingCode });
   };
 
   const deleteOrder = async (id) => {
@@ -1058,7 +1062,7 @@ export default function Admin() {
                 <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
                     <table className="w-full text-left min-w-[800px]">
                         <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
-                            <tr><th className="p-4">ID</th><th className="p-4">Game</th><th className="p-4">Customer</th><th className="p-4">Amount</th><th className="p-4">Status</th><th className="p-4">Steadfast</th><th className="p-4">Manual</th><th className="p-4">Actions</th></tr>
+                            <tr><th className="p-4">ID</th><th className="p-4">Game</th><th className="p-4">Customer</th><th className="p-4">Amount</th><th className="p-4">Status</th><th className="p-4">Steadfast</th><th className="p-4">Manual</th><th className="p-4 text-center">Dispatcher</th><th className="p-4">Actions</th></tr>
                         </thead>
                         <tbody>
                             {getFilteredOrders().length === 0 ? (
@@ -1096,7 +1100,7 @@ export default function Admin() {
                                             ) : ( (o.status === 'Unassigned' || o.status === 'Steadfast_Posted' || o.status === 'Assigned') && <span className="text-blue-600 font-bold text-[10px] flex items-center gap-1"><CheckCircle size={12}/> Posted</span> )}
                                         </td>
                                         <td className="p-4">
-                                            <select className="border-2 border-gray-300 p-1 text-[10px] font-bold rounded" value={o.status || 'Pending'} onChange={(e) => updateOrderStatus(o.id, e.target.value)}>
+                                            <select className="border-2 border-gray-300 p-1 text-[10px] font-bold rounded w-full" value={o.status || 'Pending'} onChange={(e) => updateOrderStatus(o.id, e.target.value)}>
                                                 <option value="Pickup Pending">Pickup Pending</option>
                                                 <option value="Unassigned">Unassigned</option>
                                                 <option value="Assigned">Assigned</option>
@@ -1104,6 +1108,17 @@ export default function Admin() {
                                                 <option value="Hold">Hold</option>
                                                 <option value="Delivered">Delivered</option>
                                                 <option value="Cancelled">Cancelled</option>
+                                            </select>
+                                        </td>
+                                        <td className="p-4">
+                                            <select 
+                                                className="border-2 border-indigo-300 p-1 text-[10px] font-bold rounded bg-indigo-50 text-indigo-700 focus:border-indigo-600 outline-none w-full min-w-[120px]" 
+                                                value={o.dispatched_by || ''} 
+                                                onChange={(e) => updateOrderData(o.id, { dispatched_by: e.target.value })}
+                                            >
+                                                <option value="">Select...</option>
+                                                <option value="MR JAFAR WASI">MR JAFAR WASI</option>
+                                                <option value="MR YASIR UMAYER">MR YASIR UMAYER</option>
                                             </select>
                                         </td>
                                         <td className="p-4 flex gap-2">

@@ -573,11 +573,13 @@ app.post('/api/steadfast/create', async (req, res) => {
 
 app.put('/api/orders/:id/status', async (req, res) => {
   const { id } = req.params;
-  const { status, tracking_code } = req.body;
+  const { status, tracking_code, dispatched_by } = req.body;
 
   try {
-    const updateData = { status: status };
+    const updateData = {};
+    if (status) updateData.status = status;
     if (tracking_code) updateData.tracking_code = tracking_code;
+    if (dispatched_by !== undefined) updateData.dispatched_by = dispatched_by;
 
     const { error } = await supabase
       .from('orders')
