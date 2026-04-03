@@ -204,12 +204,20 @@ export default function Admin() {
   };
 
   const updateOrderData = async (id, data) => {
-    await adminFetch(`${API_URL}/api/orders/${id}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    });
-    fetchOrders();
+    try {
+      const response = await adminFetch(`${API_URL}/api/orders/${id}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to update");
+      }
+      fetchOrders();
+    } catch (error) {
+      alert("❌ Error: " + error.message + "\n(Did you run the SQL migration to add 'dispatched_by' column?)");
+    }
   };
 
   const updateOrderStatus = (id, newStatus, trackingCode = null) => {
@@ -1060,7 +1068,7 @@ export default function Admin() {
                   );
                 })()}
                 <div className="bg-white shadow-lg border-2 border-black overflow-x-auto">
-                    <table className="w-full text-left min-w-[800px]">
+                    <table className="w-full text-left min-w-[1000px]">
                         <thead className="bg-gray-200 border-b-2 border-black text-xs uppercase font-black">
                             <tr><th className="p-4">ID</th><th className="p-4">Game</th><th className="p-4">Customer</th><th className="p-4">Amount</th><th className="p-4">Status</th><th className="p-4">Steadfast</th><th className="p-4">Manual</th><th className="p-4 text-center">Dispatcher</th><th className="p-4">Actions</th></tr>
                         </thead>
