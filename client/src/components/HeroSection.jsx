@@ -4,7 +4,8 @@ import { gsap, ScrollTrigger } from '../utils/gsapSetup';
 export default function HeroSection({ onShopClick, heroImages }) {
   const HERO_CARDS = [
     { image: heroImages?.syndicate || '/cards/syndicate/hero.webp', alt: 'The Syndicate' },
-    { image: heroImages?.tong || '/cards/tong/hero.webp', alt: 'Tong' },
+    { image: heroImages?.tong      || '/cards/tong/hero.webp',      alt: 'Tong'          },
+    { image: heroImages?.sholoana  || '/cards/sholo-ana/hero.webp', alt: 'Sholo Ana'     },
   ];
   const heroRef = useRef(null);
   const cardsWrapRef = useRef(null);
@@ -51,10 +52,11 @@ export default function HeroSection({ onShopClick, heroImages }) {
           });
 
           // Subtle float after landing
+          const mid = (cards.length - 1) / 2;
           cards.forEach((card, i) => {
             gsap.to(card, {
               y: -10,
-              rotation: `+=${i === 0 ? -2 : 2}`,
+              rotation: `+=${(i - mid) * 2}`,
               repeat: -1,
               yoyo: true,
               duration: 2.5 + i * 0.3,
@@ -64,56 +66,54 @@ export default function HeroSection({ onShopClick, heroImages }) {
           });
         },
 
-        // ===== MOBILE — scroll-triggered =====
+        // ===== MOBILE — load animation (hero fills screen so scroll trigger never fires) =====
         '(max-width: 767px)': function () {
-          gsap.set(cards, { opacity: 0, y: 100, scale: 0.5, rotation: 0 });
-
-          const tl = gsap.timeline({
-            scrollTrigger: {
-              trigger: heroRef.current,
-              start: 'top 80%',
-              end: 'center center',
-              scrub: 1,
-            },
-          });
+          const mid = (cards.length - 1) / 2;
+          const tl = gsap.timeline({ delay: 0.2 });
 
           cards.forEach((card, i) => {
-            const mid = (cards.length - 1) / 2;
             const angle = (i - mid) * 10;
-            const xSpread = (i - mid) * 100;
+            const xSpread = (i - mid) * 110;
+
+            tl.from(
+              card,
+              {
+                y: -500,
+                rotation: gsap.utils.random(-50, 50),
+                opacity: 0,
+                scale: 0.3,
+                duration: 0.6,
+                ease: 'power3.out',
+              },
+              i * 0.12
+            );
 
             tl.to(
               card,
               {
-                opacity: 1,
-                y: 0,
-                scale: 1,
                 rotation: angle,
                 x: xSpread,
-                duration: 1,
-                ease: 'power2.out',
+                y: 0,
+                scale: 1,
+                duration: 0.4,
+                ease: 'back.out(1.5)',
               },
-              i * 0.3
+              `>-0.25`
             );
           });
 
-          // Float after scroll
-          ScrollTrigger.create({
-            trigger: heroRef.current,
-            start: 'center center',
-            onEnter: () => {
-              cards.forEach((card, i) => {
-                gsap.to(card, {
-                  y: -6,
-                  rotation: `+=${i === 0 ? -3 : 3}`,
-                  repeat: -1,
-                  yoyo: true,
-                  duration: 2 + i * 0.4,
-                  ease: 'sine.inOut',
-                });
-              });
-            },
-            once: true,
+          // Subtle float
+          const floatMid = (cards.length - 1) / 2;
+          cards.forEach((card, i) => {
+            gsap.to(card, {
+              y: -8,
+              rotation: `+=${(i - floatMid) * 2}`,
+              repeat: -1,
+              yoyo: true,
+              duration: 2 + i * 0.3,
+              ease: 'sine.inOut',
+              delay: 1.2,
+            });
           });
         },
       });
@@ -169,7 +169,7 @@ export default function HeroSection({ onShopClick, heroImages }) {
 
       {/* Cards container */}
       <div
-        className="relative z-[1] h-[270px] md:h-[380px] lg:h-[400px]"
+        className="relative z-[1] w-full h-[270px] md:h-[380px] lg:h-[400px]"
         style={{ perspective: '1200px' }}
       >
         <div
@@ -180,7 +180,7 @@ export default function HeroSection({ onShopClick, heroImages }) {
           {HERO_CARDS.map((card, i) => (
             <div
               key={i}
-              className="hero-card absolute w-[180px] h-[270px] md:w-[260px] md:h-[380px] lg:w-[280px] lg:h-[400px] rounded-2xl shadow-2xl overflow-hidden"
+              className="hero-card absolute w-[140px] h-[210px] md:w-[260px] md:h-[380px] lg:w-[280px] lg:h-[400px] rounded-2xl shadow-2xl overflow-hidden"
               style={{ transformOrigin: 'center 160%' }}
             >
               <img

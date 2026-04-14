@@ -111,9 +111,17 @@ const sendTelegramNotification = async (orderData) => {
   const productNames = {
     1: "The Syndicate",
     2: "TONG",
-    3: "Chokka Bundle"
+    3: "Syndicate + Tong Bundle",
+    4: "Sholo Ana",
+    5: "Syndicate + Sholo Ana Bundle",
+    6: "Tong + Sholo Ana Bundle",
+    7: "Chokka Complete Bundle"
   };
-  const gameTitle = productNames[orderData.product_id] || "Unknown Item";
+
+  const ids = Array.isArray(orderData.product_ids) && orderData.product_ids.length > 0
+    ? orderData.product_ids
+    : [orderData.product_id];
+  const gameTitle = ids.map(id => productNames[id] || `Item #${id}`).join(' + ');
 
   const message = `💰 *NEW ORDER RECEIVED!* 💰\n\n` +
                   `📦 *Item:* ${gameTitle}\n` +
@@ -140,37 +148,50 @@ const sendTelegramNotification = async (orderData) => {
   }
 };
 
-// --- HELPER: Auto-deduct inventory on order ---
-const deductInventoryForOrder = async (product_id) => {
-  try {
-    let productIds = [];
-    if (product_id === 1) productIds = [1];
-    else if (product_id === 2) productIds = [2];
-    else if (product_id === 3) productIds = [1, 2];
+// Bundle → component individual game IDs (for inventory deduction)
+const BUNDLE_COMPONENTS = {
+  3: [1, 2],      // Syndicate + Tong
+  5: [1, 4],      // Syndicate + Sholo Ana
+  6: [2, 4],      // Tong + Sholo Ana
+  7: [1, 2, 4],   // All 3
+};
 
-    for (const pid of productIds) {
-      const itemTypes = ['card_set', 'packet', 'sticker'];
-      for (const itemType of itemTypes) {
-        await supabase.rpc('decrement_stock', {
-          p_product_id: pid,
-          p_item_type: itemType
-        }).catch(() => {
-          return supabase
-            .from('inventory')
-            .select('id, stock')
-            .eq('product_id', pid)
-            .eq('item_type', itemType)
-            .single()
-            .then(({ data }) => {
-              if (data && data.stock > 0) {
-                return supabase
-                  .from('inventory')
-                  .update({ stock: data.stock - 1 })
-                  .eq('id', data.id);
-              }
-            });
-        });
-      }
+// Deduct inventory for a single product_id (resolves bundles to components)
+const deductInventoryForProduct = async (product_id) => {
+  const pid = Number(product_id);
+  const components = BUNDLE_COMPONENTS[pid] || [pid];
+
+  for (const componentPid of components) {
+    const itemTypes = ['card_set', 'packet', 'sticker'];
+    for (const itemType of itemTypes) {
+      await supabase.rpc('decrement_stock', {
+        p_product_id: componentPid,
+        p_item_type: itemType
+      }).catch(() => {
+        return supabase
+          .from('inventory')
+          .select('id, stock')
+          .eq('product_id', componentPid)
+          .eq('item_type', itemType)
+          .single()
+          .then(({ data }) => {
+            if (data && data.stock > 0) {
+              return supabase
+                .from('inventory')
+                .update({ stock: data.stock - 1 })
+                .eq('id', data.id);
+            }
+          });
+      });
+    }
+  }
+};
+
+// Deduct inventory for all product_ids in an order
+const deductInventoryForOrder = async (product_ids_array) => {
+  try {
+    for (const pid of product_ids_array) {
+      await deductInventoryForProduct(pid);
     }
   } catch (error) {
     console.error("Inventory deduction error:", error.message);
@@ -188,7 +209,7 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
     });
   }
 
-  const { customer_name, customer_phone, customer_address, city, product_id, quantity, total_price, hp_field } = req.body;
+  const { customer_name, customer_phone, customer_address, city, product_ids, quantity, total_price, hp_field } = req.body;
 
   // --- BOT PROTECTION: Honeypot Check ---
   if (hp_field) {
@@ -197,13 +218,19 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
   }
 
   // --- SERVER-SIDE VALIDATION ---
+  const VALID_PRODUCT_IDS = [1, 2, 3, 4, 5, 6, 7];
+
   const nameStr    = String(customer_name || '').trim();
   const phoneStr   = String(customer_phone || '').trim();
   const addressStr = String(customer_address || '').trim();
   const cityStr    = String(city || '').trim();
-  const productId  = Number(product_id);
   const qty        = Number(quantity);
   const price      = Number(total_price);
+
+  // Normalise product_ids — must be a non-empty array of valid IDs
+  const productIdsArr = Array.isArray(product_ids)
+    ? product_ids.map(Number).filter(id => VALID_PRODUCT_IDS.includes(id))
+    : [];
 
   if (!nameStr || nameStr.length < 3 || nameStr.length > 100) {
     return res.status(400).json({ success: false, message: "Please enter a valid name (3-100 characters)." });
@@ -222,7 +249,7 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid city selection." });
   }
 
-  if (![1, 2, 3].includes(productId)) {
+  if (productIdsArr.length === 0) {
     return res.status(400).json({ success: false, message: "Invalid product selection." });
   }
 
@@ -230,7 +257,7 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid quantity." });
   }
 
-  if (isNaN(price) || price < 100 || price > 5000) {
+  if (isNaN(price) || price < 100 || price > 10000) {
     return res.status(400).json({ success: false, message: "Invalid order amount." });
   }
 
@@ -262,7 +289,8 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
         customer_phone: phoneStr,
         customer_address: addressStr,
         city: cityStr,
-        product_id: productId,
+        product_id: productIdsArr[0],   // backward compat: first product
+        product_ids: productIdsArr,      // full array for new orders
         quantity: qty,
         total_price: price
       }])
@@ -270,8 +298,14 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
 
     if (error) throw error;
 
-    await deductInventoryForOrder(productId);
-    await sendTelegramNotification({ ...req.body, customer_name: nameStr, customer_phone: phoneStr, city: cityStr });
+    await deductInventoryForOrder(productIdsArr);
+    await sendTelegramNotification({
+      ...req.body,
+      customer_name: nameStr,
+      customer_phone: phoneStr,
+      city: cityStr,
+      product_ids: productIdsArr,
+    });
     res.json({ success: true, orderId: data[0].id });
 
   } catch (error) {

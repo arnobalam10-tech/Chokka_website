@@ -16,7 +16,7 @@ const FALLBACK_GRADIENTS = [
   'linear-gradient(145deg, #c0392b, #3a0a10)',
 ];
 
-export default function TongShowcase({ product, images, onBuyClick }) {
+export default function TongShowcase({ product, images, onBuyClick, onBuyNow }) {
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function TongShowcase({ product, images, onBuyClick }) {
     return () => ctx.revert();
   }, []);
 
-  const handleBuy = (e) => {
+  const handleAddToCart = (e) => {
     flyToCart(e.currentTarget);
     setTimeout(() => onBuyClick(product), 900);
   };
@@ -190,16 +190,22 @@ export default function TongShowcase({ product, images, onBuyClick }) {
           <p className="text-base md:text-xl text-[#f8f5e6]/50 font-medium max-w-xl mx-auto mb-8">
             Cha, Bon, Paan, Muri. Pass the cards, keep a straight face.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
             <button
-              onClick={handleBuy}
+              onClick={handleAddToCart}
+              className="bg-[#1a3325] text-[#f8f5e6] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#e63946] transition-colors flex items-center gap-3 shadow-lg active:scale-[0.97]"
+            >
+              <ShoppingCart size={20} /> Add to Cart
+            </button>
+            <button
+              onClick={() => onBuyNow(product)}
               className="bg-[#e63946] text-[#f8f5e6] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#ff4d5a] transition-colors flex items-center gap-3 shadow-lg active:scale-[0.97]"
             >
-              <ShoppingCart size={20} /> Buy Now &bull; {product?.price || '---'}৳
+              Buy Now &bull; {product?.price || '---'}৳
             </button>
             <Link
               to="/tong"
-              className="bg-[#f8f5e6] text-[#1a3325] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-white transition-colors flex items-center gap-3 shadow-lg active:scale-[0.97]"
+              className="bg-[#f8f5e6]/15 border border-[#f8f5e6]/30 text-[#f8f5e6] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#f8f5e6]/20 transition-colors flex items-center gap-3 active:scale-[0.97]"
             >
               <Eye size={20} /> View Product
             </Link>

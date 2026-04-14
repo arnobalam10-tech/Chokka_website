@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ShieldAlert, Zap, Users, Coffee, AlertTriangle, Search } from 'lucide-react';
+import { ShieldAlert, Zap, Users, Coffee, AlertTriangle, Search, Brain, Sword, Eye } from 'lucide-react';
 import { trackPageView } from './utils/metaPixel';
+import { CartProvider } from './context/CartContext';
 
 // Page Imports
 import HomePage from './pages/HomePage.jsx';
@@ -46,7 +47,7 @@ const SYNDICATE_DATA = {
   colors: {
     bg: "#f8f5e6",
     text: "#1a3325",
-    primary: "#2e8b57", // Green
+    primary: "#2e8b57",
     secondary: "#e8e4d0"
   },
   features: [
@@ -56,7 +57,6 @@ const SYNDICATE_DATA = {
   ]
 };
 
-// --- CORRECTED TONG DATA (No Cockroaches!) ---
 const TONG_DATA = {
   gameId: 2,
   title: "TONG",
@@ -72,7 +72,7 @@ const TONG_DATA = {
   colors: {
     bg: "#f8f5e6",
     text: "#1a3325",
-    primary: "#e63946", // Red/Orange
+    primary: "#e63946",
     secondary: "#f4e4bc"
   },
   features: [
@@ -82,41 +82,84 @@ const TONG_DATA = {
   ]
 };
 
+const SHOLO_ANA_DATA = {
+  gameId: 4,
+  title: "SHOLO ANA",
+  subtitle: "Memory. Deduction. The perfect play. 48 cards, 6 suits, one unbreakable line.",
+  tagline: "Chokka's First Original Game",
+  storyTitle: "The Line That Holds All Secrets",
+  storyText: (
+    <>
+      <p>Six cards. Face-down. Placed in a row at the center of the table — this is <span className="font-bold text-[#c9a227]">The Line</span>. Nobody knows what's in it. But everyone is watching.</p>
+      <p><strong>Sholo Ana</strong> is a game of short-term memory and calculated risk. Every swap you make is public — your opponents are watching your patterns, reading your strategy, waiting for you to slip. Can you track what's hidden and claim the perfect sequence before they do?</p>
+    </>
+  ),
+  colors: {
+    bg: "#daeef9",
+    text: "#1a3a6c",
+    primary: "#2672b0",
+    secondary: "#c8e8f5"
+  },
+  features: [
+    {
+      title: "Memory & Deduction",
+      desc: "Track what's in The Line. Every swap is public — use your opponents' moves against them.",
+      icon: <Brain size={40} color="#c9a227" />
+    },
+    {
+      title: "3 Unique Actions",
+      desc: "বদল (Swap), উঁকি (Peek), দাবি (Claim). Simple to learn, impossible to master.",
+      icon: <Sword size={40} color="#c9a227" />
+    },
+    {
+      title: "The শোলো আনা Pattern",
+      desc: "Find 3 adjacent cards that add up to exactly 16. Numbers add to sixteen — শোলো আনা.",
+      icon: <Eye size={40} color="#c9a227" />
+    }
+  ]
+};
+
 // --- MAIN APP COMPONENT ---
 
 function App() {
   return (
     <HashRouter>
-      <ScrollToTop />
-      <PageViewTracker />
-      <Routes>
-        {/* 1. Public Website */}
-        <Route path="/" element={<HomePage />} />
+      <CartProvider>
+        <ScrollToTop />
+        <PageViewTracker />
+        <Routes>
+          {/* 1. Public Website */}
+          <Route path="/" element={<HomePage />} />
 
-        {/* 2. Meta Ads Landing Page */}
-        <Route path="/landing" element={<LandingPage />} />
+          {/* 2. Meta Ads Landing Page */}
+          <Route path="/landing" element={<LandingPage />} />
 
-        {/* 3. Game Routes */}
-        <Route
-          path="/syndicate"
-          element={<GameTemplate {...SYNDICATE_DATA} />}
-        />
-        <Route
-          path="/tong"
-          element={<GameTemplate {...TONG_DATA} />}
-        />
+          {/* 3. Game Routes */}
+          <Route
+            path="/syndicate"
+            element={<GameTemplate {...SYNDICATE_DATA} />}
+          />
+          <Route
+            path="/tong"
+            element={<GameTemplate {...TONG_DATA} />}
+          />
+          <Route
+            path="/sholo-ana"
+            element={<GameTemplate {...SHOLO_ANA_DATA} />}
+          />
 
-        {/* 3. Login & Admin */}
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <Admin />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
+          {/* 4. Login & Admin */}
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </CartProvider>
     </HashRouter>
   );
 }

@@ -13,7 +13,7 @@ const FALLBACK_GRADIENTS = [
   'linear-gradient(145deg, #2e8b57, #1a3325)',
 ];
 
-export default function SyndicateShowcase({ product, images, onBuyClick }) {
+export default function SyndicateShowcase({ product, images, onBuyClick, onBuyNow }) {
   const sectionRef = useRef(null);
 
   useEffect(() => {
@@ -114,7 +114,7 @@ export default function SyndicateShowcase({ product, images, onBuyClick }) {
     return () => ctx.revert();
   }, []);
 
-  const handleBuy = (e) => {
+  const handleAddToCart = (e) => {
     flyToCart(e.currentTarget);
     setTimeout(() => onBuyClick(product), 900);
   };
@@ -187,16 +187,22 @@ export default function SyndicateShowcase({ product, images, onBuyClick }) {
           <p className="text-base md:text-xl text-[#1a3325]/60 font-medium max-w-xl mx-auto mb-8">
             Trust No One. Betray Everyone. The Ultimate Game of Power &amp; Deception.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center flex-wrap">
             <button
-              onClick={handleBuy}
+              onClick={handleAddToCart}
               className="bg-[#1a3325] text-[#f8f5e6] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#2e8b57] transition-colors flex items-center gap-3 shadow-lg active:scale-[0.97]"
             >
-              <ShoppingCart size={20} /> Buy Now &bull; {product?.price || '---'}৳
+              <ShoppingCart size={20} /> Add to Cart
+            </button>
+            <button
+              onClick={() => onBuyNow(product)}
+              className="bg-[#2e8b57] text-[#f8f5e6] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#3ba86a] transition-colors flex items-center gap-3 shadow-lg active:scale-[0.97]"
+            >
+              Buy Now &bull; {product?.price || '---'}৳
             </button>
             <Link
               to="/syndicate"
-              className="bg-[#2e8b57] text-[#f8f5e6] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#3ba86a] transition-colors flex items-center gap-3 shadow-lg active:scale-[0.97]"
+              className="border-2 border-[#1a3325] text-[#1a3325] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#1a3325]/5 transition-colors flex items-center gap-3 active:scale-[0.97]"
             >
               <Eye size={20} /> View Product
             </Link>

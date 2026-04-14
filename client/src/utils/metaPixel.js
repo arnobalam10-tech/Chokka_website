@@ -117,5 +117,9 @@ export const trackCustomEvent = (eventName, params = {}) => {
 export const PRODUCT_NAMES = {
   1: 'The Syndicate',
   2: 'Tong',
-  3: 'Bundle (Syndicate + Tong)'
+  3: 'Syndicate + Tong Bundle',
+  4: 'Sholo Ana',
+  5: 'Syndicate + Sholo Ana Bundle',
+  6: 'Tong + Sholo Ana Bundle',
+  7: 'Chokka Complete Bundle'
 };
