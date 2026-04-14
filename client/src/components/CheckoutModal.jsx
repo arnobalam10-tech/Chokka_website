@@ -6,6 +6,16 @@ import { useCart } from '../context/CartContext';
 
 const API_URL = 'https://chokka-server.onrender.com';
 
+const PRODUCT_IMAGES = {
+  1: '/cards/syndicate/hero.webp',
+  2: '/cards/tong/hero.webp',
+  4: '/cards/sholo-ana/hero.webp',
+  3: '/cards/bundle/syn-tong.webp',
+  5: '/cards/bundle/syn-sholo.webp',
+  6: '/cards/bundle/tong-sholo.webp',
+  7: '/cards/bundle/all-three.webp',
+};
+
 // Cache products for upsell lookup (shared across opens)
 let cachedProducts = null;
 let cacheTs = 0;
@@ -222,8 +232,17 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
                   <div className="space-y-2">
                     {displayItems.map((item, idx) => (
                       <div key={idx} className="flex items-center gap-3">
-                        <div className="w-8 h-10 bg-[#1a3325]/10 border border-[#1a3325]/20 rounded flex items-center justify-center shrink-0">
-                          <Package size={14} className="opacity-40" />
+                        <div className="w-10 h-14 bg-[#1a3325]/10 border border-[#1a3325]/20 rounded overflow-hidden shrink-0 flex items-center justify-center">
+                          {PRODUCT_IMAGES[item.id] ? (
+                            <img
+                              src={PRODUCT_IMAGES[item.id]}
+                              alt={item.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <Package size={14} className="opacity-40" />
+                          )}
                         </div>
                         <div className="flex-1">
                           <p className="font-black text-sm uppercase leading-tight">

@@ -15,6 +15,16 @@ const GAME_COLORS = {
   4: '#2672b0', 5: '#8b6914', 6: '#b85a3a', 7: '#1a3a6c',
 };
 
+const PRODUCT_IMAGES = {
+  1: '/cards/syndicate/hero.webp',
+  2: '/cards/tong/hero.webp',
+  4: '/cards/sholo-ana/hero.webp',
+  3: '/cards/bundle/syn-tong.webp',
+  5: '/cards/bundle/syn-sholo.webp',
+  6: '/cards/bundle/tong-sholo.webp',
+  7: '/cards/bundle/all-three.webp',
+};
+
 export default function CartDrawer({ isOpen, onClose, products, onCheckout }) {
   const { cartItems, removeFromCart, addToCart, updateQuantity, clearCart } = useCart();
 
@@ -97,9 +107,18 @@ export default function CartDrawer({ isOpen, onClose, products, onCheckout }) {
                         >
                           <div className="flex items-center gap-3 mb-3">
                             <div
-                              className="w-10 h-12 rounded-lg shrink-0 border border-white/10"
+                              className="w-10 h-14 rounded-lg shrink-0 border border-white/10 overflow-hidden"
                               style={{ background: `linear-gradient(145deg, ${color}, ${color}66)` }}
-                            />
+                            >
+                              {PRODUCT_IMAGES[item.id] && (
+                                <img
+                                  src={PRODUCT_IMAGES[item.id]}
+                                  alt={item.title}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              )}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-black text-[#f8f5e6] uppercase text-sm leading-tight truncate">{item.title}</p>
                               <p className="text-[#f8f5e6]/40 text-xs font-medium mt-0.5">
