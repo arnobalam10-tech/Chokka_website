@@ -1199,6 +1199,7 @@ export default function Admin() {
                  <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                     <button onClick={() => setContentSubTab(1)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
                     <button onClick={() => setContentSubTab(2)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
+                    <button onClick={() => setContentSubTab(4)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 4 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>SHOLO ANA</button>
                     <button onClick={() => setContentSubTab(3)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
                  </div>
                  <form onSubmit={createReview} className="bg-white p-6 shadow-md border-2 border-black mb-8 flex gap-4 items-end flex-wrap">
@@ -1228,6 +1229,7 @@ export default function Admin() {
                 <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
                     <button onClick={() => setContentSubTab(1)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 1 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>THE SYNDICATE</button>
                     <button onClick={() => setContentSubTab(2)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 2 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>TONG</button>
+                    <button onClick={() => setContentSubTab(4)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 4 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>SHOLO ANA</button>
                     <button onClick={() => setContentSubTab(3)} className={`px-4 md:px-6 py-2 font-bold border-2 border-black whitespace-nowrap transition-all ${contentSubTab === 3 ? 'bg-chokka-dark text-white scale-105 shadow-md' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>BUNDLE</button>
                 </div>
 
