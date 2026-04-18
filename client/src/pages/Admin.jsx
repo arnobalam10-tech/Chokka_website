@@ -530,21 +530,22 @@ export default function Admin() {
   };
 
   // --- PRINT QUEUE: Tally pending orders by product type ---
+  // Bundle components: 3=[1,2], 5=[1,4], 6=[2,4], 7=[1,2,4]
+  const BUNDLE_COMPONENTS = { 3: [1,2], 5: [1,4], 6: [2,4], 7: [1,2,4] };
   const getPrintQueue = () => {
     let syndicate = 0;
     let tong = 0;
+    let sholoAna = 0;
     orders.filter(o => isPending(o.status)).forEach(o => {
-      const name = getProductName(o.product_id).toLowerCase();
-      if (name.includes('bundle')) {
-        syndicate += 1;
-        tong += 1;
-      } else if (name.includes('syndicate')) {
-        syndicate += 1;
-      } else if (name.includes('tong')) {
-        tong += 1;
-      }
+      const id = o.product_id || 1;
+      const components = BUNDLE_COMPONENTS[id] || [id];
+      components.forEach(cid => {
+        if (cid === 1) syndicate += 1;
+        else if (cid === 2) tong += 1;
+        else if (cid === 4) sholoAna += 1;
+      });
     });
-    return { syndicate, tong };
+    return { syndicate, tong, sholoAna };
   };
 
   const getExpenseTotals = () => {
@@ -1040,7 +1041,7 @@ export default function Admin() {
                 {/* --- PRINT QUEUE SUMMARY BANNER --- */}
                 {(() => {
                   const pq = getPrintQueue();
-                  const total = pq.syndicate + pq.tong;
+                  const total = pq.syndicate + pq.tong + pq.sholoAna;
                   return (
                     <div className="mb-6 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 border-2 border-indigo-500 shadow-xl rounded-lg p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                       <div className="flex items-center gap-3 min-w-max">
@@ -1058,6 +1059,10 @@ export default function Admin() {
                         <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
                           <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Tong</div>
                           <div className="text-white font-black text-3xl leading-none">{pq.tong}</div>
+                        </div>
+                        <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
+                          <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Sholo Ana</div>
+                          <div className="text-white font-black text-3xl leading-none">{pq.sholoAna}</div>
                         </div>
                       </div>
                       <div className="bg-white/10 border border-white/20 rounded-lg px-5 py-3 text-center min-w-[100px] ml-auto">
