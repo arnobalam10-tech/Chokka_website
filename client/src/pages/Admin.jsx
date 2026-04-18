@@ -68,6 +68,19 @@ export default function Admin() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); 
 
+  // Admin Place Order Modal State
+  const [showPlaceOrder, setShowPlaceOrder] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [adminOrderForm, setAdminOrderForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    customer_address: '',
+    city: 'Dhaka',
+    product_id: 1,
+    quantity: 1,
+    total_price: ''
+  });
+
   const [editingOrder, setEditingOrder] = useState(null);
   const [editForm, setEditForm] = useState({ customer_name: '', customer_phone: '', customer_address: '', total_price: 0 });
 
@@ -228,6 +241,49 @@ export default function Admin() {
     if(!confirm("⚠️ Delete this order permanently?")) return;
     await adminFetch(`${API_URL}/api/orders/${id}`, { method: 'DELETE' });
     fetchOrders();
+  };
+
+  // --- ADMIN: Place Order directly (bypasses rate limit) ---
+  const placeAdminOrder = async (e) => {
+    e.preventDefault();
+    setIsPlacingOrder(true);
+    try {
+      const payload = {
+        customer_name: adminOrderForm.customer_name,
+        customer_phone: adminOrderForm.customer_phone,
+        customer_address: adminOrderForm.customer_address,
+        city: adminOrderForm.city,
+        product_ids: [Number(adminOrderForm.product_id)],
+        quantity: Number(adminOrderForm.quantity),
+        total_price: Number(adminOrderForm.total_price)
+      };
+      const response = await adminFetch(`${API_URL}/api/admin/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json();
+      if (result.success) {
+        alert(`✅ Order #${result.orderId} placed successfully!`);
+        setAdminOrderForm({ customer_name: '', customer_phone: '', customer_address: '', city: 'Dhaka', product_id: 1, quantity: 1, total_price: '' });
+        setShowPlaceOrder(false);
+        fetchOrders();
+      } else {
+        alert('❌ Error: ' + (result.message || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Server error: ' + err.message);
+    } finally {
+      setIsPlacingOrder(false);
+    }
+  };
+
+  // Auto-calculate price when product or city changes in admin order form
+  const getAdminOrderPrice = (productId, city) => {
+    const p = products.find(prod => prod.id === Number(productId));
+    if (!p) return '';
+    const delivery = city === 'Dhaka' ? (p.delivery_dhaka || 0) : (p.delivery_outside || 0);
+    return Number(p.price) + Number(delivery);
   };
 
   // --- NEW: EDIT FUNCTIONS ---
@@ -983,6 +1039,9 @@ export default function Admin() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4">
                     <h2 className="text-3xl font-bold">ORDER MANAGEMENT</h2>
                     <div className="flex gap-2 flex-wrap">
+                        <button onClick={() => setShowPlaceOrder(true)} className="bg-purple-700 text-white px-4 py-3 font-bold shadow-lg hover:bg-purple-800 flex items-center gap-2 border-2 border-black transition-transform active:scale-95 text-xs md:text-sm">
+                            <Plus size={18}/> PLACE ORDER
+                        </button>
                         <button onClick={syncAllStatus} disabled={isSyncing} className="bg-blue-600 text-white px-4 py-3 font-bold shadow-lg hover:bg-blue-700 flex items-center gap-2 border-2 border-black transition-transform active:scale-95 disabled:opacity-50 text-xs md:text-sm">
                             <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""}/> {isSyncing ? 'SYNCING...' : 'CHECK DELIVERY STATUS'}
                         </button>
@@ -1679,6 +1738,156 @@ CREATE POLICY "Anon delete" ON celebrity_reviews FOR DELETE USING (true);`}</pre
                     </button>
                 </form>
             </div>
+        </div>
+      )}
+
+      {/* --- ADMIN PLACE ORDER MODAL --- */}
+      {showPlaceOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+          <div className="bg-white border-4 border-purple-700 shadow-2xl p-6 w-full max-w-lg relative">
+            <button onClick={() => setShowPlaceOrder(false)} className="absolute top-3 right-3 text-gray-400 hover:text-black transition-colors">
+              <X size={26}/>
+            </button>
+
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b-2 border-gray-100">
+              <div className="bg-purple-700 text-white p-2 rounded">
+                <Plus size={22}/>
+              </div>
+              <div>
+                <h2 className="text-xl font-black uppercase tracking-tight">Place Order (Admin)</h2>
+                <p className="text-xs text-gray-500 font-bold">No rate limit · Sends Telegram notification · Deducts inventory</p>
+              </div>
+            </div>
+
+            <form onSubmit={placeAdminOrder} className="flex flex-col gap-4">
+              {/* Customer Name */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Customer Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Rahim Uddin"
+                    value={adminOrderForm.customer_name}
+                    onChange={e => setAdminOrderForm(f => ({ ...f, customer_name: e.target.value }))}
+                    className="w-full border-2 border-gray-300 p-2 font-bold focus:border-purple-600 outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Phone (BD) *</label>
+                  <input
+                    required
+                    type="tel"
+                    placeholder="01XXXXXXXXX"
+                    value={adminOrderForm.customer_phone}
+                    onChange={e => setAdminOrderForm(f => ({ ...f, customer_phone: e.target.value }))}
+                    className="w-full border-2 border-gray-300 p-2 font-bold focus:border-purple-600 outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Delivery Address *</label>
+                <textarea
+                  required
+                  rows={2}
+                  placeholder="e.g. 123, Mirpur-10, Dhaka"
+                  value={adminOrderForm.customer_address}
+                  onChange={e => setAdminOrderForm(f => ({ ...f, customer_address: e.target.value }))}
+                  className="w-full border-2 border-gray-300 p-2 font-bold resize-none focus:border-purple-600 outline-none transition-colors"
+                />
+              </div>
+
+              {/* City + Product */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">City *</label>
+                  <select
+                    value={adminOrderForm.city}
+                    onChange={e => {
+                      const newCity = e.target.value;
+                      const autoPrice = getAdminOrderPrice(adminOrderForm.product_id, newCity);
+                      setAdminOrderForm(f => ({ ...f, city: newCity, total_price: autoPrice !== '' ? autoPrice : f.total_price }));
+                    }}
+                    className="w-full border-2 border-gray-300 p-2 font-bold focus:border-purple-600 outline-none bg-white"
+                  >
+                    <option value="Dhaka">Dhaka</option>
+                    <option value="Outside Dhaka">Outside Dhaka</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Product *</label>
+                  <select
+                    value={adminOrderForm.product_id}
+                    onChange={e => {
+                      const newPid = e.target.value;
+                      const autoPrice = getAdminOrderPrice(newPid, adminOrderForm.city);
+                      setAdminOrderForm(f => ({ ...f, product_id: newPid, total_price: autoPrice !== '' ? autoPrice : f.total_price }));
+                    }}
+                    className="w-full border-2 border-gray-300 p-2 font-bold focus:border-purple-600 outline-none bg-white"
+                  >
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Qty + Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={adminOrderForm.quantity}
+                    onChange={e => setAdminOrderForm(f => ({ ...f, quantity: e.target.value }))}
+                    className="w-full border-2 border-gray-300 p-2 font-bold focus:border-purple-600 outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Total Price (BDT) *</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    placeholder="Auto-calculated"
+                    value={adminOrderForm.total_price}
+                    onChange={e => setAdminOrderForm(f => ({ ...f, total_price: e.target.value }))}
+                    className="w-full border-2 border-purple-300 bg-purple-50 p-2 font-black text-purple-800 focus:border-purple-600 outline-none transition-colors"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Auto-filled from product price + delivery. Edit if needed.</p>
+                </div>
+              </div>
+
+              {/* Summary Preview */}
+              {adminOrderForm.total_price && (
+                <div className="bg-purple-50 border-2 border-purple-200 rounded p-3 text-sm flex justify-between items-center">
+                  <span className="font-bold text-purple-700">Order Total</span>
+                  <span className="font-black text-purple-900 text-lg">{adminOrderForm.total_price}৳</span>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="submit"
+                  disabled={isPlacingOrder}
+                  className="flex-1 bg-purple-700 text-white font-black py-3 uppercase tracking-widest hover:bg-purple-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isPlacingOrder ? 'PLACING...' : <><Plus size={18}/> PLACE ORDER</>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPlaceOrder(false)}
+                  className="px-6 bg-gray-100 text-gray-500 font-black hover:bg-gray-200 transition-colors"
+                >
+                  CANCEL
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

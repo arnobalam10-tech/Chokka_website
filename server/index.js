@@ -319,6 +319,77 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
 });
 
 
+// --- ADMIN: Place Order (no rate limit, no honeypot, protected by requireAdmin via global middleware) ---
+app.post('/api/admin/create-order', async (req, res) => {
+  const { customer_name, customer_phone, customer_address, city, product_ids, quantity, total_price } = req.body;
+
+  const VALID_PRODUCT_IDS = [1, 2, 3, 4, 5, 6, 7];
+
+  const nameStr    = String(customer_name || '').trim();
+  const phoneStr   = String(customer_phone || '').trim();
+  const addressStr = String(customer_address || '').trim();
+  const cityStr    = String(city || '').trim();
+  const qty        = Number(quantity) || 1;
+  const price      = Number(total_price);
+
+  const productIdsArr = Array.isArray(product_ids)
+    ? product_ids.map(Number).filter(id => VALID_PRODUCT_IDS.includes(id))
+    : [];
+
+  if (!nameStr || nameStr.length < 2) {
+    return res.status(400).json({ success: false, message: "Please enter a customer name." });
+  }
+  if (!/^01[3-9]\d{8}$/.test(phoneStr)) {
+    return res.status(400).json({ success: false, message: "Invalid Bangladeshi phone number." });
+  }
+  if (!addressStr || addressStr.length < 5) {
+    return res.status(400).json({ success: false, message: "Please enter a delivery address." });
+  }
+  if (!['Dhaka', 'Outside Dhaka'].includes(cityStr)) {
+    return res.status(400).json({ success: false, message: "Invalid city. Use 'Dhaka' or 'Outside Dhaka'." });
+  }
+  if (productIdsArr.length === 0) {
+    return res.status(400).json({ success: false, message: "Select at least one valid product." });
+  }
+  if (isNaN(price) || price < 0) {
+    return res.status(400).json({ success: false, message: "Invalid total price." });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .insert([{
+        customer_name: nameStr,
+        customer_phone: phoneStr,
+        customer_address: addressStr,
+        city: cityStr,
+        product_id: productIdsArr[0],
+        product_ids: productIdsArr,
+        quantity: qty,
+        total_price: price
+      }])
+      .select();
+
+    if (error) throw error;
+
+    await deductInventoryForOrder(productIdsArr);
+    await sendTelegramNotification({
+      customer_name: nameStr,
+      customer_phone: phoneStr,
+      city: cityStr,
+      product_ids: productIdsArr,
+      total_price: price,
+    });
+
+    console.log(`[Admin Order] Placed by admin: ${nameStr} | ${phoneStr} | Products: ${productIdsArr}`);
+    res.json({ success: true, orderId: data[0].id });
+
+  } catch (error) {
+    console.error("Admin Order Error:", error.message);
+    res.status(500).json({ success: false, message: "Database error.", error: error.message });
+  }
+});
+
 // Get All Orders (Admin Panel) - PROTECTED by global middleware
 app.get('/api/orders', async (req, res) => {
   try {
