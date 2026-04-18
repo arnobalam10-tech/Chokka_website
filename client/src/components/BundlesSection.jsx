@@ -78,30 +78,14 @@ function BundleCard({ bundle, products, onBuyNow, index }) {
       className="bg-white border-2 border-[#1a3325] rounded-2xl overflow-hidden shadow-[6px_6px_0px_0px_#1a3325] hover:shadow-[2px_2px_0px_0px_#1a3325] hover:translate-x-1 hover:translate-y-1 transition-all flex flex-col"
     >
       {/* Image area */}
-      <div className="relative aspect-[4/3] bg-[#e8e4d0]">
+      <div className="relative aspect-[4/3] bg-[#1a3325]">
         <img
           src={bundle.imagePath}
           alt={bundle.name}
           loading="lazy"
           decoding="async"
           className="w-full h-full object-cover"
-          onError={(e) => { e.currentTarget.style.display = 'none'; }}
         />
-        {/* Fallback gradient with game color dots */}
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-3"
-          style={{ background: 'linear-gradient(145deg, #1a3325, #0a1510)' }}
-        >
-          <div className="flex gap-2">
-            {bundle.colors.map((color, i) => (
-              <div
-                key={i}
-                className="w-10 h-14 md:w-12 md:h-18 rounded-lg border-2 border-white/20 shadow-lg"
-                style={{ background: `linear-gradient(145deg, ${color}, ${color}99)` }}
-              />
-            ))}
-          </div>
-        </div>
 
         {/* Label pill */}
         <div className="absolute top-3 left-3 bg-[#1a3325] text-[#f8f5e6] text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-white/10">
@@ -174,27 +158,8 @@ function HeroBundleCard({ bundle, products, onBuyNow }) {
             alt={bundle.name}
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover opacity-90"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            className="w-full h-full object-cover"
           />
-          {/* Fallback */}
-          <div className="absolute inset-0 flex items-center justify-center"
-            style={{ background: 'linear-gradient(145deg, #0e1628, #1a3325)' }}
-          >
-            <div className="flex gap-3 items-end">
-              {bundle.colors.map((color, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border-2 border-white/20 shadow-xl"
-                  style={{
-                    background: `linear-gradient(145deg, ${color}, ${color}99)`,
-                    width: `${48 + i * 8}px`,
-                    height: `${72 + i * 12}px`,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
 
           {/* BEST VALUE badge */}
           <div className="absolute top-4 left-4 bg-[#2e8b57] text-[#f8f5e6] text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg">
