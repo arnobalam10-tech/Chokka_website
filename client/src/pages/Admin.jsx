@@ -592,6 +592,13 @@ export default function Admin() {
     let syndicate = 0;
     let tong = 0;
     let sholoAna = 0;
+    let chokkaComplete = 0;
+    let tongPlusSyn = 0;
+    let tongPlusSholoAna = 0;
+    let sholoAnaPlusSyn = 0;
+    let indSyndicate = 0;
+    let indTong = 0;
+    let indSholoAna = 0;
     orders.filter(o => isPending(o.status)).forEach(o => {
       const id = o.product_id || 1;
       const components = BUNDLE_COMPONENTS[id] || [id];
@@ -600,8 +607,19 @@ export default function Admin() {
         else if (cid === 2) tong += 1;
         else if (cid === 4) sholoAna += 1;
       });
+      if (id === 7) chokkaComplete += 1;
+      else if (id === 3) tongPlusSyn += 1;
+      else if (id === 6) tongPlusSholoAna += 1;
+      else if (id === 5) sholoAnaPlusSyn += 1;
+      else if (id === 1) indSyndicate += 1;
+      else if (id === 2) indTong += 1;
+      else if (id === 4) indSholoAna += 1;
     });
-    return { syndicate, tong, sholoAna };
+    return {
+      syndicate, tong, sholoAna,
+      bundles: { chokkaComplete, tongPlusSyn, tongPlusSholoAna, sholoAnaPlusSyn },
+      individuals: { indSyndicate, indTong, indSholoAna },
+    };
   };
 
   const getExpenseTotals = () => {
@@ -1102,31 +1120,74 @@ export default function Admin() {
                   const pq = getPrintQueue();
                   const total = pq.syndicate + pq.tong + pq.sholoAna;
                   return (
-                    <div className="mb-6 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 border-2 border-indigo-500 shadow-xl rounded-lg p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                      <div className="flex items-center gap-3 min-w-max">
-                        <span className="text-3xl select-none">🖨️</span>
-                        <div>
-                          <div className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">Print Queue</div>
-                          <div className="text-white font-black text-sm uppercase tracking-wider">Pending Orders</div>
+                    <div className="mb-6 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 border-2 border-indigo-500 shadow-xl rounded-lg p-5 flex flex-col gap-5">
+                      {/* Row 1: component totals */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <div className="flex items-center gap-3 min-w-max">
+                          <span className="text-3xl select-none">🖨️</span>
+                          <div>
+                            <div className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">Print Queue</div>
+                            <div className="text-white font-black text-sm uppercase tracking-wider">To Print</div>
+                          </div>
+                        </div>
+                        <div className="flex-1 flex flex-wrap gap-4 sm:justify-center">
+                          <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
+                            <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Syndicate</div>
+                            <div className="text-white font-black text-3xl leading-none">{pq.syndicate}</div>
+                          </div>
+                          <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
+                            <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Tong</div>
+                            <div className="text-white font-black text-3xl leading-none">{pq.tong}</div>
+                          </div>
+                          <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
+                            <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Sholo Ana</div>
+                            <div className="text-white font-black text-3xl leading-none">{pq.sholoAna}</div>
+                          </div>
+                        </div>
+                        <div className="bg-white/10 border border-white/20 rounded-lg px-5 py-3 text-center min-w-[100px] ml-auto">
+                          <div className="text-indigo-200 text-[10px] font-black uppercase tracking-widest mb-1">Total</div>
+                          <div className="text-yellow-300 font-black text-3xl leading-none">{total}</div>
                         </div>
                       </div>
-                      <div className="flex-1 flex flex-wrap gap-4 sm:justify-center">
-                        <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
-                          <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Syndicate</div>
-                          <div className="text-white font-black text-3xl leading-none">{pq.syndicate}</div>
+
+                      {/* Divider */}
+                      <div className="border-t border-indigo-600/60" />
+
+                      {/* Row 2: order breakdown by type */}
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl select-none">📦</span>
+                          <div className="text-indigo-200 text-[10px] font-black uppercase tracking-widest">Order Breakdown</div>
                         </div>
-                        <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
-                          <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Tong</div>
-                          <div className="text-white font-black text-3xl leading-none">{pq.tong}</div>
+                        {/* Bundles */}
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest w-16 shrink-0">Bundles</span>
+                          {[
+                            { label: 'Chokka Complete', count: pq.bundles.chokkaComplete },
+                            { label: 'Tong + Syn', count: pq.bundles.tongPlusSyn },
+                            { label: 'Tong + Sholo Ana', count: pq.bundles.tongPlusSholoAna },
+                            { label: 'Sholo Ana + Syn', count: pq.bundles.sholoAnaPlusSyn },
+                          ].map(({ label, count }) => (
+                            <div key={label} className={`rounded px-3 py-1.5 text-center border ${count > 0 ? 'bg-indigo-600/70 border-indigo-400' : 'bg-indigo-900/40 border-indigo-700/40'}`}>
+                              <div className="text-indigo-300 text-[9px] font-black uppercase tracking-widest leading-none mb-0.5">{label}</div>
+                              <div className={`font-black text-xl leading-none ${count > 0 ? 'text-white' : 'text-indigo-600'}`}>{count}</div>
+                            </div>
+                          ))}
                         </div>
-                        <div className="bg-indigo-700/60 border border-indigo-400 rounded-lg px-6 py-3 text-center min-w-[110px]">
-                          <div className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mb-1">Sholo Ana</div>
-                          <div className="text-white font-black text-3xl leading-none">{pq.sholoAna}</div>
+                        {/* Individuals */}
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <span className="text-indigo-400 text-[10px] font-black uppercase tracking-widest w-16 shrink-0">Singles</span>
+                          {[
+                            { label: 'Syndicate', count: pq.individuals.indSyndicate },
+                            { label: 'Tong', count: pq.individuals.indTong },
+                            { label: 'Sholo Ana', count: pq.individuals.indSholoAna },
+                          ].map(({ label, count }) => (
+                            <div key={label} className={`rounded px-3 py-1.5 text-center border ${count > 0 ? 'bg-indigo-600/70 border-indigo-400' : 'bg-indigo-900/40 border-indigo-700/40'}`}>
+                              <div className="text-indigo-300 text-[9px] font-black uppercase tracking-widest leading-none mb-0.5">{label}</div>
+                              <div className={`font-black text-xl leading-none ${count > 0 ? 'text-white' : 'text-indigo-600'}`}>{count}</div>
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                      <div className="bg-white/10 border border-white/20 rounded-lg px-5 py-3 text-center min-w-[100px] ml-auto">
-                        <div className="text-indigo-200 text-[10px] font-black uppercase tracking-widest mb-1">Total</div>
-                        <div className="text-yellow-300 font-black text-3xl leading-none">{total}</div>
                       </div>
                     </div>
                   );

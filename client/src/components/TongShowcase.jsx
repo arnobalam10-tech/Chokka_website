@@ -170,7 +170,7 @@ export default function TongShowcase({ product, images, onBuyClick, onBuyNow }) 
                 High-quality card stock, bold artwork, and a box built to survive game nights. Makes the perfect gift.
               </p>
               <div className="mt-6 flex flex-wrap gap-2 justify-center md:justify-start">
-                {['110+ Cards', 'Matte Finish', 'Gift Ready'].map(tag => (
+                {['64 Cards', 'Matte Finish', 'Gift Ready'].map(tag => (
                   <span key={tag} className="border border-[#f8f5e6]/15 text-[#f8f5e6]/45 text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
                     {tag}
                   </span>
