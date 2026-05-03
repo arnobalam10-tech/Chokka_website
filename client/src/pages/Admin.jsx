@@ -381,7 +381,8 @@ export default function Admin() {
         const { data: urlData } = supabase.storage.from('product_photos').getPublicUrl(fileName);
         imageUrl = urlData.publicUrl;
       }
-      const { error } = await supabase.from('celebrity_reviews').insert({ ...celebForm, image_url: imageUrl });
+      const nextId = celebReviews.length > 0 ? Math.max(...celebReviews.map(r => r.id)) + 1 : 1;
+      const { error } = await supabase.from('celebrity_reviews').insert({ id: nextId, ...celebForm, image_url: imageUrl });
       if (error) throw error;
       setCelebForm({ name: '', role: '', company: '', rating: 5, quote: '' });
       setCelebImageFile(null);
