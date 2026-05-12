@@ -49,6 +49,7 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
 
   // For Buy Now: which product is currently active (can be swapped to bundle via upsell)
   const [activeProduct, setActiveProduct] = useState(product || null);
+  const [buyNowQty, setBuyNowQty]         = useState(1);
   // Products fetched from API (needed for upsell)
   const [allProducts, setAllProducts]     = useState([]);
 
@@ -63,6 +64,7 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
   // Reset active product when modal opens fresh with a new product
   useEffect(() => {
     if (product) setActiveProduct(product);
+    setBuyNowQty(1);
     setDiscount(0);
     setCouponMsg('');
   }, [product, isOpen]);
@@ -111,6 +113,7 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
 
   const handleUpsell = (bundleProduct) => {
     setActiveProduct(bundleProduct);
+    setBuyNowQty(1);
     setDiscount(0);
     setCouponMsg('');
   };
@@ -122,9 +125,9 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
 
   if (isBuyNow && activeProduct) {
     const del = formData.city === 'Dhaka' ? (activeProduct.delivery_dhaka ?? 80) : (activeProduct.delivery_outside ?? 80);
-    subtotal      = activeProduct.price;
+    subtotal      = activeProduct.price * buyNowQty;
     totalDelivery = del;
-    displayItems  = [{ ...activeProduct, quantity: 1, delivery: del }];
+    displayItems  = [{ ...activeProduct, quantity: buyNowQty, delivery: del }];
   } else if (isCartMode) {
     displayItems = cartItemsProp.map((item) => {
       const del = formData.city === 'Dhaka' ? (item.delivery_dhaka ?? 80) : (item.delivery_outside ?? 80);
@@ -156,7 +159,7 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
     // Build product_ids array (repeat ID for each unit)
     let productIds = [];
     if (isBuyNow && activeProduct) {
-      productIds = [activeProduct.id];
+      productIds = Array(buyNowQty).fill(activeProduct.id);
     } else if (isCartMode) {
       productIds = cartItemsProp.flatMap((i) => Array(i.quantity || 1).fill(i.id));
     }
@@ -190,7 +193,7 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
           onClose();
           setStatus('idle');
           setFormData({ name: '', phone: '', email: '', address: '', city: 'Dhaka', couponCode: '', hp_field: '' });
-          setDiscount(0); setCouponMsg('');
+          setBuyNowQty(1); setDiscount(0); setCouponMsg('');
         }, 3000);
       } else {
         alert('Error: ' + (data.message || data.error || 'Unknown error'));
@@ -247,13 +250,30 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
                           )}
                         </div>
                         <div className="flex-1">
-                          <p className="font-black text-sm uppercase leading-tight">
-                            {item.title}
-                            {item.quantity > 1 && <span className="text-[#2e8b57] ml-1">×{item.quantity}</span>}
-                          </p>
+                          <p className="font-black text-sm uppercase leading-tight">{item.title}</p>
                           {item.delivery === 0 && <p className="text-xs text-[#2e8b57] font-bold">Delivery included</p>}
                         </div>
-                        <span className="font-bold text-sm">{item.price * (item.quantity || 1)}৳</span>
+                        {isBuyNow ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setBuyNowQty(q => Math.max(1, q - 1))}
+                              className="w-7 h-7 bg-[#1a3325] text-white font-black text-lg leading-none flex items-center justify-center hover:bg-[#2e8b57] transition-colors rounded-sm"
+                            >−</button>
+                            <span className="w-6 text-center font-black text-sm">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => setBuyNowQty(q => Math.min(10, q + 1))}
+                              className="w-7 h-7 bg-[#1a3325] text-white font-black text-lg leading-none flex items-center justify-center hover:bg-[#2e8b57] transition-colors rounded-sm"
+                            >+</button>
+                            <span className="font-bold text-sm ml-2">{item.price * item.quantity}৳</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 shrink-0">
+                            {item.quantity > 1 && <span className="text-[#2e8b57] font-bold text-xs">×{item.quantity}</span>}
+                            <span className="font-bold text-sm">{item.price * (item.quantity || 1)}৳</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
