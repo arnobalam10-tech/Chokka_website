@@ -209,7 +209,7 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
     });
   }
 
-  const { customer_name, customer_phone, customer_address, city, product_ids, quantity, total_price, hp_field } = req.body;
+  const { customer_name, customer_phone, customer_address, city, product_ids, quantity, total_price, coupon_code, discount_applied, hp_field } = req.body;
 
   // --- BOT PROTECTION: Honeypot Check ---
   if (hp_field) {
@@ -261,6 +261,24 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid order amount." });
   }
 
+  // --- COUPON VALIDATION (server-side) ---
+  let verifiedCouponCode = null;
+  let verifiedDiscount = 0;
+  if (coupon_code) {
+    const couponCodeStr = String(coupon_code).trim().toUpperCase();
+    try {
+      const { data: couponData } = await supabase
+        .from('coupons')
+        .select('discount, is_active')
+        .eq('code', couponCodeStr)
+        .single();
+      if (couponData && couponData.is_active) {
+        verifiedCouponCode = couponCodeStr;
+        verifiedDiscount = Number(couponData.discount) || 0;
+      }
+    } catch (_) { /* coupon lookup failure — ignore, just don't apply discount */ }
+  }
+
   // --- DUPLICATE ORDER DETECTION: Block same phone within 10 minutes ---
   try {
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -292,7 +310,9 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
         product_id: productIdsArr[0],   // backward compat: first product
         product_ids: productIdsArr,      // full array for new orders
         quantity: qty,
-        total_price: price
+        total_price: price,
+        coupon_code: verifiedCouponCode,
+        discount_applied: verifiedDiscount
       }])
       .select();
 

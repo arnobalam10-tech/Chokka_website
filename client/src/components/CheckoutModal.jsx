@@ -175,6 +175,8 @@ export default function CheckoutModal({ isOpen, onClose, cartItems: cartItemsPro
           product_ids: productIds,
           quantity: productIds.length,
           total_price: TOTAL,
+          coupon_code: discount > 0 ? formData.couponCode.toUpperCase() : null,
+          discount_applied: discount,
           hp_field: formData.hp_field,
         }),
       });

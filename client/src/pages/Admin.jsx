@@ -148,6 +148,17 @@ export default function Admin() {
     return p ? p.title : "Syndicate";
   };
 
+  const getCartSummary = (order) => {
+    const ids = Array.isArray(order.product_ids) && order.product_ids.length > 0
+      ? order.product_ids
+      : [order.product_id || 1];
+    const counts = {};
+    ids.forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+    return Object.entries(counts)
+      .map(([id, qty]) => qty > 1 ? `${getProductName(Number(id))} ×${qty}` : getProductName(Number(id)))
+      .join(' + ');
+  };
+
   // --- ACTIONS ---
 
   const sendToSteadfast = async (order) => {
@@ -1205,13 +1216,20 @@ export default function Admin() {
                                 getFilteredOrders().map(o => (
                                     <tr key={o.id} className="border-b hover:bg-gray-50 transition-colors">
                                         <td className="p-4 font-mono text-xs text-gray-400">#{o.id}</td>
-                                        <td className="p-4 font-bold text-[10px]"><span className="bg-blue-50 text-blue-700 px-2 py-1 border border-blue-200 uppercase">{getProductName(o.product_id)}</span></td>
+                                        <td className="p-4 font-bold text-[10px]"><span className="bg-blue-50 text-blue-700 px-2 py-1 border border-blue-200 uppercase">{getCartSummary(o)}</span></td>
                                         <td className="p-4">
                                             <div className="font-bold">{o.customer_name}</div>
                                             <div className="text-xs text-gray-500">{o.customer_phone}</div>
                                             <div className="text-[10px] text-gray-400 mt-1 leading-tight max-w-[150px]">{o.customer_address}</div>
                                         </td>
-                                        <td className="p-4 font-bold text-lg">{o.total_price}৳</td>
+                                        <td className="p-4">
+                                            <div className="font-bold text-lg">{o.total_price}৳</div>
+                                            {o.coupon_code && (
+                                                <div className="text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 mt-0.5 inline-block uppercase tracking-wide">
+                                                    🏷 {o.coupon_code} -{o.discount_applied}৳
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="p-4">
                                             {/* --- UPDATED: NEW BADGE COLORS --- */}
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide
