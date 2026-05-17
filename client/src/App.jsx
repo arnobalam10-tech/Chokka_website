@@ -11,6 +11,9 @@ import LandingPage from './pages/LandingPage.jsx';
 import Admin from './pages/Admin.jsx';
 import Login from './pages/Loginl.jsx';
 import ScrollToTop from './components/ScrollToTop.jsx';
+import HowToPlaySyndicate from './pages/HowToPlaySyndicate.jsx';
+import HowToPlayTong from './pages/HowToPlayTong.jsx';
+import HowToPlaySholoAna from './pages/HowToPlaySholoAna.jsx';
 
 // Security Guard
 const ProtectedRoute = ({ children }) => {
@@ -148,7 +151,12 @@ function App() {
             element={<GameTemplate {...SHOLO_ANA_DATA} />}
           />
 
-          {/* 4. Login & Admin */}
+          {/* 4. How to Play */}
+          <Route path="/how-to-play/syndicate" element={<HowToPlaySyndicate />} />
+          <Route path="/how-to-play/tong" element={<HowToPlayTong />} />
+          <Route path="/how-to-play/sholo-ana" element={<HowToPlaySholoAna />} />
+
+          {/* 5. Login & Admin */}
           <Route path="/login" element={<Login />} />
           <Route
             path="/admin"

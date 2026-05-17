@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { gsap, ScrollTrigger } from '../utils/gsapSetup';
-import { ShoppingCart, Eye } from 'lucide-react';
+import { ShoppingCart, Eye, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { flyToCart } from '../utils/cartAnimation';
 
@@ -125,6 +125,9 @@ export default function SyndicateShowcase({ product, images, onBuyClick, onBuyNo
             </button>
             <Link to="/syndicate" className="border-2 border-[#1a3325] text-[#1a3325] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#1a3325]/5 transition-colors flex items-center gap-3 active:scale-[0.97]">
               <Eye size={20} /> View Product
+            </Link>
+            <Link to="/how-to-play/syndicate" className="border-2 border-[#2e8b57] text-[#2e8b57] px-8 py-4 md:px-10 font-black text-base md:text-lg uppercase tracking-widest rounded-xl hover:bg-[#2e8b57]/10 transition-colors flex items-center gap-3 active:scale-[0.97]">
+              <BookOpen size={20} /> How to Play
             </Link>
           </div>
         </div>
