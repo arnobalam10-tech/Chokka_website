@@ -1249,8 +1249,23 @@ const checkFraud = async (phone_number) => {
 app.post('/api/fraud-check', async (req, res) => {
   const { phone_number } = req.body;
   if (!phone_number) return res.status(400).json({ error: 'phone_number required' });
-  const result = await checkFraud(phone_number);
-  res.json(result);
+  const normalized = normalizePhone(phone_number);
+  const FRAUDBD_API_KEY = process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
+  console.log(`[FraudBD] Proxy call for: "${normalized}"`);
+  try {
+    const response = await fetch('https://fraudbd.com/api/check-courier-info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'api_key': FRAUDBD_API_KEY },
+      body: JSON.stringify({ phone_number: normalized })
+    });
+    const raw = await response.json();
+    console.log(`[FraudBD] Raw response:`, JSON.stringify(raw));
+    // Return the full raw FraudBD response — client does the parsing
+    res.json({ ok: true, raw, phone: normalized });
+  } catch (e) {
+    console.error(`[FraudBD] Proxy error:`, e.message);
+    res.json({ ok: false, error: e.message, phone: normalized });
+  }
 });
 
 app.put('/api/orders/:id/fraud', async (req, res) => {

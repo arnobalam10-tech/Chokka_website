@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 
 const API_URL = 'https://chokka-server.onrender.com';
-const FRAUDBD_KEY = 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
 
 const adminFetch = (url, opts = {}) => {
   const token = localStorage.getItem('admin_token');
@@ -12,11 +11,15 @@ const adminFetch = (url, opts = {}) => {
   });
 };
 
-const normalizePhone = (phone) => {
-  let cleaned = String(phone || '').replace(/[\s\-\(\)]/g, '');
-  if (cleaned.startsWith('+880')) cleaned = '0' + cleaned.slice(4);
-  else if (cleaned.startsWith('880') && cleaned.length === 13) cleaned = '0' + cleaned.slice(3);
-  return cleaned;
+const parseTotalSummary = (raw) => {
+  if (!raw) return null;
+  // Try documented path: data.totalSummary
+  if (raw.status && raw.data?.totalSummary) return raw.data.totalSummary;
+  // Try root-level totalSummary
+  if (raw.status && raw.totalSummary) return raw.totalSummary;
+  // Try if data itself is the summary
+  if (raw.status && raw.data?.total !== undefined) return raw.data;
+  return null;
 };
 
 export default function FraudBadge({ order, onUpdate }) {
@@ -26,33 +29,27 @@ export default function FraudBadge({ order, onUpdate }) {
   const handleCheck = async () => {
     setLoading(true);
     try {
-      const phone = normalizePhone(order.customer_phone);
-
-      // Call FraudBD directly from the browser — avoids server-IP blocking
-      const fraudRes = await fetch('https://fraudbd.com/api/check-courier-info', {
+      const res = await adminFetch(`${API_URL}/api/fraud-check`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'api_key': FRAUDBD_KEY },
-        body: JSON.stringify({ phone_number: phone })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: order.customer_phone })
       });
-      const fraudJson = await fraudRes.json();
-      console.log('[FraudBadge] FraudBD raw response:', fraudJson);
+      const json = await res.json();
+      console.log('[FraudBadge] Server response:', json);
 
-      let result;
-      if (fraudJson.status && fraudJson.data?.totalSummary) {
-        result = fraudJson.data.totalSummary;
-      } else {
-        console.warn('[FraudBadge] FraudBD error:', fraudJson.message);
-        result = { total: 0, success: 0, successRate: null };
+      let totalSummary = parseTotalSummary(json.raw);
+      if (!totalSummary) {
+        console.warn('[FraudBadge] Could not parse totalSummary. Raw:', json.raw);
+        totalSummary = { total: 0, success: 0, successRate: null };
       }
 
-      // Save to DB via our server
       await adminFetch(`${API_URL}/api/orders/${order.id}/fraud`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fraud_data: result })
+        body: JSON.stringify({ fraud_data: totalSummary })
       });
 
-      onUpdate(order.id, result);
+      onUpdate(order.id, totalSummary);
     } catch (e) {
       console.error('[FraudBadge] Error:', e);
     } finally {
@@ -68,9 +65,7 @@ export default function FraudBadge({ order, onUpdate }) {
         title="Fraud Check"
         className="mt-1 text-[9px] font-black bg-gray-100 text-gray-500 border border-gray-300 px-1.5 py-0.5 rounded hover:bg-gray-200 transition-colors disabled:opacity-50 leading-tight"
       >
-        {loading ? (
-          <span className="inline-block animate-spin">↻</span>
-        ) : 'FC'}
+        {loading ? <span className="inline-block animate-spin">↻</span> : 'FC'}
       </button>
     );
   }
