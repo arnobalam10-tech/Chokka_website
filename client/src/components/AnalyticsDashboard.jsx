@@ -1,12 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend, ComposedChart, Area
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend, ComposedChart, Area, Line
 } from 'recharts';
 import {
   TrendingUp, Package, ShoppingCart, CheckCircle, XCircle, Clock, Percent,
-  BarChart3, Calendar, Download, ChevronDown, DollarSign, Target, Layers,
-  RefreshCw, AlertCircle, TrendingDown, Award, Filter
+  BarChart3, Calendar, Download, DollarSign, Target, Layers, Award, Filter
 } from 'lucide-react';
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
@@ -24,6 +23,14 @@ const STATUS_COLORS = {
 
 const SYNDICATE_COLOR = '#6366f1';
 const TONG_COLOR = '#f59e0b';
+const SHOLO_ANA_COLOR = '#10b981';
+
+// product_id → component product IDs (1=Syndicate, 2=Tong, 4=Sholo Ana)
+const BUNDLE_COMPONENTS = { 3: [1, 2], 5: [1, 4], 6: [2, 4], 7: [1, 2, 4] };
+
+// hardcoded costs per unit
+const UNIT_COST = { 1: 150, 2: 170, 4: 170 };
+const DELIVERY_COST_PER_ORDER = 90;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -37,10 +44,7 @@ const fmtShort = (n) => {
   return '৳' + v.toFixed(2);
 };
 
-const today = () => {
-  const d = new Date();
-  return d.toISOString().split('T')[0];
-};
+const today = () => new Date().toISOString().split('T')[0];
 
 const daysAgo = (n) => {
   const d = new Date();
@@ -53,13 +57,6 @@ const getOrderDate = (o) => (o.created_at || '').split('T')[0];
 const getProductLabel = (productId, products) => {
   const p = products.find(pr => pr.id === (productId || 1));
   return p ? p.title : 'Syndicate';
-};
-
-const getProductType = (productId, products) => {
-  const name = getProductLabel(productId, products).toLowerCase();
-  if (name.includes('bundle')) return 'bundle';
-  if (name.includes('tong') || name.includes('টং')) return 'tong';
-  return 'syndicate';
 };
 
 const isDelivered = (s) => s && s.toLowerCase().includes('delivered');
@@ -104,7 +101,7 @@ const KpiCard = ({ label, value, sub, icon: Icon, color = 'text-gray-900', bg = 
 
 // ─── DONUT CHART LABEL ────────────────────────────────────────────────────────
 
-const DonutLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+const DonutLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
   if (percent < 0.04) return null;
   const RADIAN = Math.PI / 180;
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -123,7 +120,7 @@ export default function AnalyticsDashboard({ orders, products }) {
   const [preset, setPreset] = useState('7d');
   const [customStart, setCustomStart] = useState(daysAgo(7));
   const [customEnd, setCustomEnd] = useState(today());
-  const [cogsInput, setCogsInput] = useState({ syndicate: 0, tong: 0 }); // editable COGS per unit
+  const [adSpend, setAdSpend] = useState('');
   const [ordersPage, setOrdersPage] = useState(0);
   const [orderStatusFilter, setOrderStatusFilter] = useState('All');
   const [orderProductFilter, setOrderProductFilter] = useState('All');
@@ -159,36 +156,41 @@ export default function AnalyticsDashboard({ orders, products }) {
       return s === 'assigned' || s === 'dispatched' || s === 'unassigned' || s === 'hold';
     });
 
-    const totalRevenue = filteredOrders.reduce((s, o) => s + Number(o.total_price || 0), 0);
+    // Revenue excludes cancelled orders
+    const totalRevenue = nonCancelled.reduce((s, o) => s + Number(o.total_price || 0), 0);
     const totalOrders = filteredOrders.length;
-    const aov = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const aov = nonCancelled.length > 0 ? totalRevenue / nonCancelled.length : 0;
 
-    // Product splits
-    let syndicateUnits = 0, tongUnits = 0, syndicateRevenue = 0, tongRevenue = 0;
-    filteredOrders.forEach(o => {
-      const type = getProductType(o.product_id, products);
+    // Unit counts via bundle component expansion (non-cancelled only)
+    let syndicateUnits = 0, tongUnits = 0, sholoAnaUnits = 0;
+    let syndicateRevenue = 0, tongRevenue = 0, sholoAnaRevenue = 0;
+
+    nonCancelled.forEach(o => {
+      const id = o.product_id || 1;
       const qty = Number(o.quantity || 1);
       const rev = Number(o.total_price || 0);
-      if (type === 'bundle') {
-        syndicateUnits += qty;
-        tongUnits += qty;
-        syndicateRevenue += rev / 2;
-        tongRevenue += rev / 2;
-      } else if (type === 'tong') {
-        tongUnits += qty;
-        tongRevenue += rev;
-      } else {
-        syndicateUnits += qty;
-        syndicateRevenue += rev;
-      }
+      const components = BUNDLE_COMPONENTS[id] || [id];
+      const revShare = rev / components.length;
+
+      components.forEach(cid => {
+        if (cid === 1) { syndicateUnits += qty; syndicateRevenue += revShare; }
+        else if (cid === 2) { tongUnits += qty; tongRevenue += revShare; }
+        else if (cid === 4) { sholoAnaUnits += qty; sholoAnaRevenue += revShare; }
+      });
     });
-    const totalUnits = syndicateUnits + tongUnits;
 
-    // Profit: revenue - (total COGS per product)
-    const totalCOGS = syndicateUnits * Number(cogsInput.syndicate || 0) + tongUnits * Number(cogsInput.tong || 0);
-    const totalProfit = totalRevenue - totalCOGS;
+    const totalUnits = syndicateUnits + tongUnits + sholoAnaUnits;
 
-    // Cancellation and delivery rates
+    // Hardcoded cost breakdown
+    const syndicateCost = syndicateUnits * UNIT_COST[1];
+    const tongCost = tongUnits * UNIT_COST[2];
+    const sholoAnaCost = sholoAnaUnits * UNIT_COST[4];
+    const totalProductCost = syndicateCost + tongCost + sholoAnaCost;
+    const totalDeliveryCost = nonCancelled.length * DELIVERY_COST_PER_ORDER;
+    const totalAdSpend = Number(adSpend || 0);
+    const totalCosts = totalProductCost + totalDeliveryCost + totalAdSpend;
+    const totalProfit = totalRevenue - totalCosts;
+
     const cancellationRate = totalOrders > 0 ? (cancelled.length / totalOrders) * 100 : 0;
     const deliverySuccessRate = totalOrders > 0 ? (delivered.length / totalOrders) * 100 : 0;
 
@@ -205,7 +207,7 @@ export default function AnalyticsDashboard({ orders, products }) {
     });
     const statusData = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
 
-    // Daily trend data
+    // Daily trend (revenue excludes cancelled)
     const dayCount = Math.min(
       Math.round((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1,
       60
@@ -220,16 +222,15 @@ export default function AnalyticsDashboard({ orders, products }) {
     filteredOrders.forEach(o => {
       const d = getOrderDate(o);
       if (dailyMap[d]) {
-        dailyMap[d].revenue += Number(o.total_price || 0);
+        if (!isCancelled(o.status)) dailyMap[d].revenue += Number(o.total_price || 0);
         dailyMap[d].orders += 1;
       }
     });
     const trendData = Object.values(dailyMap).map(d => ({
       ...d,
-      dateLabel: d.date.slice(5), // MM-DD
+      dateLabel: d.date.slice(5),
     }));
 
-    // Top 5 performing days by revenue
     const topDays = [...trendData]
       .filter(d => d.orders > 0)
       .sort((a, b) => b.revenue - a.revenue)
@@ -239,27 +240,37 @@ export default function AnalyticsDashboard({ orders, products }) {
         date: d.date,
         revenue: d.revenue,
         orders: d.orders,
-        units: filteredOrders
+        units: nonCancelled
           .filter(o => getOrderDate(o) === d.date)
           .reduce((s, o) => s + Number(o.quantity || 1), 0),
       }));
 
     return {
-      totalRevenue, totalOrders, aov, totalUnits, totalProfit, totalCOGS,
-      syndicateUnits, tongUnits, syndicateRevenue, tongRevenue,
+      totalRevenue, totalOrders, aov, totalUnits, totalProfit,
+      syndicateCost, tongCost, sholoAnaCost,
+      totalProductCost, totalDeliveryCost, totalAdSpend, totalCosts,
+      syndicateUnits, tongUnits, sholoAnaUnits,
+      syndicateRevenue, tongRevenue, sholoAnaRevenue,
       delivered, cancelled, pending, inTransit,
       cancellationRate, deliverySuccessRate,
       statusData, trendData, topDays,
+      nonCancelledCount: nonCancelled.length,
     };
-  }, [filteredOrders, products, cogsInput]);
+  }, [filteredOrders, adSpend]);
 
   // ─── RECENT ORDERS TABLE ───────────────────────────────────────────────────
   const tableOrders = useMemo(() => {
     return filteredOrders
       .filter(o => {
-        const productMatch = orderProductFilter === 'All' ||
-          getProductType(o.product_id, products) === orderProductFilter.toLowerCase() ||
-          (orderProductFilter === 'bundle' && getProductType(o.product_id, products) === 'bundle');
+        const id = o.product_id || 1;
+        const components = BUNDLE_COMPONENTS[id] || [id];
+        let productMatch = true;
+        if (orderProductFilter !== 'All') {
+          if (orderProductFilter === 'syndicate') productMatch = components.length === 1 && components[0] === 1;
+          else if (orderProductFilter === 'tong') productMatch = components.length === 1 && components[0] === 2;
+          else if (orderProductFilter === 'sholoana') productMatch = components.length === 1 && components[0] === 4;
+          else if (orderProductFilter === 'bundle') productMatch = components.length > 1;
+        }
         const statusMatch = orderStatusFilter === 'All' ||
           (orderStatusFilter === 'Delivered' && isDelivered(o.status)) ||
           (orderStatusFilter === 'Cancelled' && isCancelled(o.status)) ||
@@ -268,7 +279,7 @@ export default function AnalyticsDashboard({ orders, products }) {
         return productMatch && statusMatch;
       })
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  }, [filteredOrders, products, orderStatusFilter, orderProductFilter]);
+  }, [filteredOrders, orderStatusFilter, orderProductFilter]);
 
   const totalPages = Math.ceil(tableOrders.length / ORDERS_PER_PAGE);
   const pagedOrders = tableOrders.slice(ordersPage * ORDERS_PER_PAGE, (ordersPage + 1) * ORDERS_PER_PAGE);
@@ -349,12 +360,13 @@ export default function AnalyticsDashboard({ orders, products }) {
 
       {/* ── KPI CARDS ROW ── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-8">
-        <KpiCard label="Total Revenue" value={fmt(analytics.totalRevenue)} icon={TrendingUp} color="text-green-700" bg="bg-green-50" loading={loading} />
-        <KpiCard label="Total Profit" value={fmt(analytics.totalProfit)} sub={analytics.totalCOGS > 0 ? `COGS: ${fmt(analytics.totalCOGS)}` : 'Set COGS ↓'} icon={DollarSign} color={analytics.totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'} loading={loading} />
+        <KpiCard label="Total Revenue" value={fmt(analytics.totalRevenue)} sub="Excl. cancelled" icon={TrendingUp} color="text-green-700" bg="bg-green-50" loading={loading} />
+        <KpiCard label="Net Profit" value={fmt(analytics.totalProfit)} sub="After all costs" icon={DollarSign} color={analytics.totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'} loading={loading} />
         <KpiCard label="Total Orders" value={analytics.totalOrders} icon={ShoppingCart} color="text-blue-700" loading={loading} />
-        <KpiCard label="Games Sold" value={analytics.totalUnits} sub={`Syn: ${analytics.syndicateUnits} · Tong: ${analytics.tongUnits}`} icon={Package} color="text-indigo-700" loading={loading} />
-        <KpiCard label="Syndicate Units" value={analytics.syndicateUnits} icon={Layers} color="text-indigo-600" loading={loading} />
-        <KpiCard label="Tong Units" value={analytics.tongUnits} icon={Layers} color="text-amber-600" loading={loading} />
+        <KpiCard label="Games Sold" value={analytics.totalUnits} sub={`Syn: ${analytics.syndicateUnits} · Tong: ${analytics.tongUnits} · SA: ${analytics.sholoAnaUnits}`} icon={Package} color="text-indigo-700" loading={loading} />
+        <KpiCard label="Syndicate Units" value={analytics.syndicateUnits} sub="৳150 / unit" icon={Layers} color="text-indigo-600" loading={loading} />
+        <KpiCard label="Tong Units" value={analytics.tongUnits} sub="৳170 / unit" icon={Layers} color="text-amber-600" loading={loading} />
+        <KpiCard label="Sholo Ana Units" value={analytics.sholoAnaUnits} sub="৳170 / unit" icon={Layers} color="text-emerald-600" loading={loading} />
         <KpiCard label="Avg. Order Value" value={fmt(analytics.aov)} icon={Target} color="text-purple-700" loading={loading} />
         <KpiCard label="Delivered" value={analytics.delivered.length} icon={CheckCircle} color="text-green-700" bg="bg-green-50" loading={loading} />
         <KpiCard label="Cancelled" value={analytics.cancelled.length} icon={XCircle} color="text-red-600" bg="bg-red-50" loading={loading} />
@@ -421,37 +433,37 @@ export default function AnalyticsDashboard({ orders, products }) {
             <div className="h-48 flex items-center justify-center text-gray-400 font-bold text-sm">No sales in this period</div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-indigo-50 border-2 border-indigo-300 p-4">
-                  <div className="text-indigo-500 font-black text-[10px] uppercase tracking-widest mb-1">Syndicate</div>
-                  <div className="text-2xl font-black text-indigo-700">{analytics.syndicateUnits} <span className="text-sm font-bold">units</span></div>
-                  <div className="text-sm font-bold text-indigo-500">{fmt(analytics.syndicateRevenue)}</div>
-                  <div className="text-[10px] font-bold text-gray-500 mt-1">
-                    {analytics.totalUnits > 0 ? ((analytics.syndicateUnits / analytics.totalUnits) * 100).toFixed(1) : 0}% of total
-                  </div>
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-indigo-50 border-2 border-indigo-300 p-3">
+                  <div className="text-indigo-500 font-black text-[9px] uppercase tracking-widest mb-1">Syndicate</div>
+                  <div className="text-xl font-black text-indigo-700">{analytics.syndicateUnits}<span className="text-xs font-bold ml-1">units</span></div>
+                  <div className="text-xs font-bold text-indigo-500">{fmt(analytics.syndicateRevenue)}</div>
+                  <div className="text-[9px] font-bold text-gray-400 mt-1">Cost: {fmt(analytics.syndicateCost)}</div>
                 </div>
-                <div className="bg-amber-50 border-2 border-amber-300 p-4">
-                  <div className="text-amber-500 font-black text-[10px] uppercase tracking-widest mb-1">Tong (টং)</div>
-                  <div className="text-2xl font-black text-amber-700">{analytics.tongUnits} <span className="text-sm font-bold">units</span></div>
-                  <div className="text-sm font-bold text-amber-500">{fmt(analytics.tongRevenue)}</div>
-                  <div className="text-[10px] font-bold text-gray-500 mt-1">
-                    {analytics.totalUnits > 0 ? ((analytics.tongUnits / analytics.totalUnits) * 100).toFixed(1) : 0}% of total
-                  </div>
+                <div className="bg-amber-50 border-2 border-amber-300 p-3">
+                  <div className="text-amber-500 font-black text-[9px] uppercase tracking-widest mb-1">Tong (টং)</div>
+                  <div className="text-xl font-black text-amber-700">{analytics.tongUnits}<span className="text-xs font-bold ml-1">units</span></div>
+                  <div className="text-xs font-bold text-amber-500">{fmt(analytics.tongRevenue)}</div>
+                  <div className="text-[9px] font-bold text-gray-400 mt-1">Cost: {fmt(analytics.tongCost)}</div>
+                </div>
+                <div className="bg-emerald-50 border-2 border-emerald-300 p-3">
+                  <div className="text-emerald-500 font-black text-[9px] uppercase tracking-widest mb-1">Sholo Ana</div>
+                  <div className="text-xl font-black text-emerald-700">{analytics.sholoAnaUnits}<span className="text-xs font-bold ml-1">units</span></div>
+                  <div className="text-xs font-bold text-emerald-500">{fmt(analytics.sholoAnaRevenue)}</div>
+                  <div className="text-[9px] font-bold text-gray-400 mt-1">Cost: {fmt(analytics.sholoAnaCost)}</div>
                 </div>
               </div>
-              <ResponsiveContainer width="100%" height={140}>
+              <ResponsiveContainer width="100%" height={110}>
                 <BarChart data={[
-                  { name: 'Units', Syndicate: analytics.syndicateUnits, 'Tong (টং)': analytics.tongUnits },
-                  { name: 'Revenue (÷100)', Syndicate: analytics.syndicateRevenue / 100, 'Tong (টং)': analytics.tongRevenue / 100 },
-                ]} barSize={28}>
+                  { name: 'Units Sold', Syndicate: analytics.syndicateUnits, 'Tong (টং)': analytics.tongUnits, 'Sholo Ana': analytics.sholoAnaUnits },
+                ]} barSize={24}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
                   <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip
-                    formatter={(v, name) => name.includes('Revenue') ? [`${(v * 100).toFixed(0)}`, name] : [v, name]}
-                  />
-                  <Bar dataKey="Syndicate" fill={SYNDICATE_COLOR} radius={[2,2,0,0]} />
-                  <Bar dataKey="Tong (টং)" fill={TONG_COLOR} radius={[2,2,0,0]} />
+                  <Tooltip />
+                  <Bar dataKey="Syndicate" fill={SYNDICATE_COLOR} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Tong (টং)" fill={TONG_COLOR} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Sholo Ana" fill={SHOLO_ANA_COLOR} radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </>
@@ -558,52 +570,82 @@ export default function AnalyticsDashboard({ orders, products }) {
           <h3 className="font-black text-base uppercase tracking-tight mb-4 flex items-center gap-2">
             <DollarSign size={16} /> Profit Analysis
           </h3>
-          <div className="bg-yellow-50 border-2 border-yellow-300 p-3 mb-4">
-            <div className="text-[10px] font-black uppercase text-yellow-700 mb-2">Set Cost Per Unit (COGS)</div>
-            <div className="flex gap-4 flex-wrap">
-              <div>
-                <label className="text-[10px] font-black text-gray-500 block mb-1">Syndicate (৳/unit)</label>
-                <input
-                  type="number"
-                  value={cogsInput.syndicate}
-                  onChange={e => setCogsInput(v => ({ ...v, syndicate: e.target.value }))}
-                  className="border-2 border-yellow-300 p-1.5 w-24 font-black text-sm focus:border-black outline-none bg-white"
-                  min="0"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-gray-500 block mb-1">Tong (৳/unit)</label>
-                <input
-                  type="number"
-                  value={cogsInput.tong}
-                  onChange={e => setCogsInput(v => ({ ...v, tong: e.target.value }))}
-                  className="border-2 border-yellow-300 p-1.5 w-24 font-black text-sm focus:border-black outline-none bg-white"
-                  min="0"
-                  placeholder="0"
-                />
-              </div>
+
+          {/* Hardcoded unit costs */}
+          <div className="bg-gray-50 border border-gray-200 p-3 mb-4">
+            <div className="text-[10px] font-black uppercase text-gray-500 mb-2">Unit Costs (Fixed)</div>
+            <div className="flex gap-4 flex-wrap text-xs font-bold">
+              <span className="text-indigo-700">Syndicate: ৳150</span>
+              <span className="text-amber-700">Tong: ৳170</span>
+              <span className="text-emerald-700">Sholo Ana: ৳170</span>
+              <span className="text-gray-600">Delivery: ৳90/order</span>
             </div>
           </div>
-          <div className="space-y-3">
+
+          {/* Ad Spend input */}
+          <div className="bg-yellow-50 border-2 border-yellow-300 p-3 mb-5">
+            <label className="text-[10px] font-black uppercase text-yellow-800 block mb-1.5">
+              Ad Spend — Enter Manually
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-gray-600 text-sm">৳</span>
+              <input
+                type="number"
+                value={adSpend}
+                onChange={e => setAdSpend(e.target.value)}
+                className="border-2 border-yellow-400 p-1.5 w-36 font-black text-sm focus:border-black outline-none bg-white"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          {/* Full cost breakdown */}
+          <div className="space-y-2">
+            <div className="text-[10px] font-black uppercase text-gray-500 mb-2">Cost Breakdown</div>
+
             <div className="flex justify-between items-center border-b pb-2">
-              <span className="font-bold text-gray-600 text-sm">Total Revenue</span>
+              <span className="font-bold text-gray-700 text-sm">Total Revenue</span>
               <span className="font-black text-green-700">{fmt(analytics.totalRevenue)}</span>
             </div>
-            <div className="flex justify-between items-center border-b pb-2">
-              <span className="font-bold text-gray-600 text-sm">Total COGS</span>
-              <span className="font-black text-red-600">-{fmt(analytics.totalCOGS)}</span>
+
+            <div className="flex justify-between items-center border-b pb-1.5 text-xs pl-2">
+              <span className="font-bold text-gray-500">Syndicate ({analytics.syndicateUnits} × ৳150)</span>
+              <span className="font-black text-red-500">-{fmt(analytics.syndicateCost)}</span>
             </div>
+            <div className="flex justify-between items-center border-b pb-1.5 text-xs pl-2">
+              <span className="font-bold text-gray-500">Tong ({analytics.tongUnits} × ৳170)</span>
+              <span className="font-black text-red-500">-{fmt(analytics.tongCost)}</span>
+            </div>
+            <div className="flex justify-between items-center border-b pb-1.5 text-xs pl-2">
+              <span className="font-bold text-gray-500">Sholo Ana ({analytics.sholoAnaUnits} × ৳170)</span>
+              <span className="font-black text-red-500">-{fmt(analytics.sholoAnaCost)}</span>
+            </div>
+            <div className="flex justify-between items-center border-b pb-1.5 text-xs pl-2">
+              <span className="font-bold text-gray-500">Delivery ({analytics.nonCancelledCount} orders × ৳90)</span>
+              <span className="font-black text-red-500">-{fmt(analytics.totalDeliveryCost)}</span>
+            </div>
+            <div className="flex justify-between items-center border-b pb-1.5 text-xs pl-2">
+              <span className="font-bold text-gray-500">Ad Spend</span>
+              <span className="font-black text-red-500">-{fmt(analytics.totalAdSpend)}</span>
+            </div>
+
+            <div className="flex justify-between items-center border-b pb-2">
+              <span className="font-bold text-gray-700 text-sm">Total Costs</span>
+              <span className="font-black text-red-600">-{fmt(analytics.totalCosts)}</span>
+            </div>
+
             <div className="flex justify-between items-center bg-gray-50 p-3 border-2 border-black">
               <span className="font-black uppercase tracking-wider text-sm">Net Profit</span>
               <span className={`font-black text-xl ${analytics.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                 {analytics.totalProfit >= 0 ? '+' : ''}{fmt(analytics.totalProfit)}
               </span>
             </div>
+
             {analytics.totalRevenue > 0 && (
-              <div className="flex justify-between items-center text-sm">
+              <div className="flex justify-between items-center text-sm pt-1">
                 <span className="font-bold text-gray-500">Profit Margin</span>
-                <span className="font-black">
+                <span className={`font-black ${analytics.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                   {((analytics.totalProfit / analytics.totalRevenue) * 100).toFixed(2)}%
                 </span>
               </div>
@@ -620,7 +662,6 @@ export default function AnalyticsDashboard({ orders, products }) {
             <span className="text-gray-400 font-bold text-sm">({tableOrders.length})</span>
           </h3>
           <div className="flex gap-2 flex-wrap items-center">
-            {/* Status filter */}
             <div className="flex items-center gap-1">
               <Filter size={12} className="text-gray-400" />
               <select
@@ -645,6 +686,7 @@ export default function AnalyticsDashboard({ orders, products }) {
               <option value="All">All Products</option>
               <option value="syndicate">Syndicate</option>
               <option value="tong">Tong</option>
+              <option value="sholoana">Sholo Ana</option>
               <option value="bundle">Bundle</option>
             </select>
             <button
@@ -678,7 +720,12 @@ export default function AnalyticsDashboard({ orders, products }) {
                 </tr>
               ) : (
                 pagedOrders.map(o => {
-                  const type = getProductType(o.product_id, products);
+                  const id = o.product_id || 1;
+                  const components = BUNDLE_COMPONENTS[id] || [id];
+                  const type = components.length > 1 ? 'bundle'
+                    : components[0] === 2 ? 'tong'
+                    : components[0] === 4 ? 'sholoana'
+                    : 'syndicate';
                   return (
                     <tr key={o.id} className="border-b hover:bg-gray-50 transition-colors">
                       <td className="p-3 font-mono text-xs text-gray-400">#{o.id}</td>
@@ -690,6 +737,7 @@ export default function AnalyticsDashboard({ orders, products }) {
                         <span className={`px-2 py-0.5 text-[10px] font-black uppercase border ${
                           type === 'tong' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                           type === 'bundle' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                          type === 'sholoana' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                           'bg-indigo-50 text-indigo-700 border-indigo-200'
                         }`}>
                           {getProductLabel(o.product_id, products)}
