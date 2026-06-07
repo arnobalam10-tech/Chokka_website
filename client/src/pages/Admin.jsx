@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Package, Truck, Tag, DollarSign, Save, Plus, Star, Trash2, Image as ImageIcon, Upload, Send, CheckCircle, BarChart3, TrendingUp, Calendar, AlertCircle, Edit3, RefreshCw, Menu, X, Boxes, Receipt, Wallet, LayoutDashboard, AlertTriangle, PackageCheck, Award } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import FraudBadge from '../components/FraudBadge';
 
 // --- CONFIGURATION ---
 const supabaseUrl = 'https://vbcvbruvqvbvkouiutdz.supabase.co';
@@ -159,6 +160,14 @@ export default function Admin() {
       .join(' + ');
   };
 
+  const formatDate = (ts) => {
+    if (!ts) return '';
+    return new Date(ts).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+      timeZone: 'Asia/Dhaka', hour12: false
+    });
+  };
+
   // --- ACTIONS ---
 
   const sendToSteadfast = async (order) => {
@@ -174,7 +183,7 @@ export default function Admin() {
                 address: order.customer_address,
                 phone: order.customer_phone,
                 amount: order.total_price,
-                note: `Game: ${getProductName(order.product_id)}`
+                note: getCartSummary(order)
             })
         });
         const result = await response.json();
@@ -361,6 +370,10 @@ export default function Admin() {
     });
   };
 
+
+  const updateOrderFraud = (orderId, fraudData) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, fraud_data: fraudData } : o));
+  };
 
   // ... (Other update functions kept exactly as is)
   const updateProduct = async (id, updatedData) => { const res = await adminFetch(`${API_URL}/api/products/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedData) }); if(res.ok) fetchProducts(); };
@@ -1215,11 +1228,15 @@ export default function Admin() {
                             ) : (
                                 getFilteredOrders().map(o => (
                                     <tr key={o.id} className="border-b hover:bg-gray-50 transition-colors">
-                                        <td className="p-4 font-mono text-xs text-gray-400">#{o.id}</td>
+                                        <td className="p-4 font-mono text-xs text-gray-400">
+                                            <div>#{o.id}</div>
+                                            <div className="text-[10px] text-gray-300 mt-0.5 whitespace-nowrap">{formatDate(o.created_at)}</div>
+                                        </td>
                                         <td className="p-4 font-bold text-[10px]"><span className="bg-blue-50 text-blue-700 px-2 py-1 border border-blue-200 uppercase">{getCartSummary(o)}</span></td>
                                         <td className="p-4">
                                             <div className="font-bold">{o.customer_name}</div>
                                             <div className="text-xs text-gray-500">{o.customer_phone}</div>
+                                            <FraudBadge order={o} onUpdate={updateOrderFraud} />
                                             <div className="text-[10px] text-gray-400 mt-1 leading-tight max-w-[150px]">{o.customer_address}</div>
                                         </td>
                                         <td className="p-4">

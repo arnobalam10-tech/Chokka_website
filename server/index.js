@@ -108,20 +108,10 @@ const sendTelegramNotification = async (orderData) => {
     '8033841967'  // Yasir
   ];
 
-  const productNames = {
-    1: "The Syndicate",
-    2: "TONG",
-    3: "Syndicate + Tong Bundle",
-    4: "Sholo Ana",
-    5: "Syndicate + Sholo Ana Bundle",
-    6: "Tong + Sholo Ana Bundle",
-    7: "Chokka Complete Bundle"
-  };
-
   const ids = Array.isArray(orderData.product_ids) && orderData.product_ids.length > 0
     ? orderData.product_ids
     : [orderData.product_id];
-  const gameTitle = ids.map(id => productNames[id] || `Item #${id}`).join(' + ');
+  const gameTitle = ids.map(id => PRODUCT_NAMES[id] || `Item #${id}`).join(' + ');
 
   const message = `💰 *NEW ORDER RECEIVED!* 💰\n\n` +
                   `📦 *Item:* ${gameTitle}\n` +
@@ -146,6 +136,24 @@ const sendTelegramNotification = async (orderData) => {
       console.error(`Telegram Error for ID ${chatId}:`, error);
     }
   }
+};
+
+// Product name map (used for Steadfast notes, Telegram, etc.)
+const PRODUCT_NAMES = {
+  1: "The Syndicate",
+  2: "TONG",
+  3: "Syndicate + Tong Bundle",
+  4: "Sholo Ana",
+  5: "Syndicate + Sholo Ana Bundle",
+  6: "Tong + Sholo Ana Bundle",
+  7: "Chokka Complete Bundle"
+};
+
+const getOrderNote = (order) => {
+  const ids = Array.isArray(order.product_ids) && order.product_ids.length > 0
+    ? order.product_ids
+    : [order.product_id || 1];
+  return [...new Set(ids)].map(id => PRODUCT_NAMES[id] || `Item #${id}`).join(' + ');
 };
 
 // Bundle → component individual game IDs (for inventory deduction)
@@ -326,14 +334,24 @@ app.post('/api/create-order', orderLimiter, async (req, res) => {
       city: cityStr,
       product_ids: productIdsArr,
     });
-    res.json({ success: true, orderId: data[0].id });
+
+    const newOrderId = data[0].id;
+    res.json({ success: true, orderId: newOrderId });
+
+    // Background fraud check — fire and forget, does not block response
+    ;(async () => {
+      try {
+        const fraudSummary = await checkFraud(phoneStr);
+        await supabase.from('orders').update({ fraud_data: fraudSummary }).eq('id', newOrderId);
+      } catch (e) { console.error('Fraud bg error:', e.message); }
+    })();
 
   } catch (error) {
     console.error("Database Error:", error.message);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: "Server database error. Please contact support or try again later.",
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -401,8 +419,17 @@ app.post('/api/admin/create-order', async (req, res) => {
       total_price: price,
     });
 
+    const adminOrderId = data[0].id;
     console.log(`[Admin Order] Placed by admin: ${nameStr} | ${phoneStr} | Products: ${productIdsArr}`);
-    res.json({ success: true, orderId: data[0].id });
+    res.json({ success: true, orderId: adminOrderId });
+
+    // Background fraud check — fire and forget
+    ;(async () => {
+      try {
+        const fraudSummary = await checkFraud(phoneStr);
+        await supabase.from('orders').update({ fraud_data: fraudSummary }).eq('id', adminOrderId);
+      } catch (e) { console.error('Fraud bg error:', e.message); }
+    })();
 
   } catch (error) {
     console.error("Admin Order Error:", error.message);
@@ -737,7 +764,7 @@ app.post('/api/steadfast/bulk-create', async (req, res) => {
     recipient_address: o.customer_address,
     recipient_phone: o.customer_phone,
     cod_amount: o.total_price,
-    note: 'Handle with care'
+    note: getOrderNote(o)
   }));
 
   try {
@@ -1176,6 +1203,49 @@ app.get('/api/dashboard/summary', async (req, res) => {
       totalExpenses,
       totalPayouts
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =============================================
+// --- FRAUDBD INTEGRATION - PROTECTED ---
+// =============================================
+
+const checkFraud = async (phone_number) => {
+  try {
+    const response = await fetch('https://fraudbd.com/api/check-courier-info', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_key': process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df'
+      },
+      body: JSON.stringify({ phone_number })
+    });
+    const data = await response.json();
+    if (data.status && data.data?.totalSummary) {
+      return data.data.totalSummary;
+    }
+  } catch (e) {
+    console.error('FraudBD error:', e.message);
+  }
+  return { total: 0, success: 0, successRate: null };
+};
+
+app.post('/api/fraud-check', async (req, res) => {
+  const { phone_number } = req.body;
+  if (!phone_number) return res.status(400).json({ error: 'phone_number required' });
+  const result = await checkFraud(phone_number);
+  res.json(result);
+});
+
+app.put('/api/orders/:id/fraud', async (req, res) => {
+  const { id } = req.params;
+  const { fraud_data } = req.body;
+  try {
+    const { error } = await supabase.from('orders').update({ fraud_data }).eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
