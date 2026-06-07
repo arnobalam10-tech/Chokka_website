@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
-const https = require('https');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -1268,27 +1267,6 @@ app.post('/api/fraud-check', async (req, res) => {
   }
 });
 
-// Sandbox test — hit GET /api/fraud-check/sandbox to verify key validity
-app.get('/api/fraud-check/sandbox', async (req, res) => {
-  try {
-    const url = `https://fraudbd.com/api/sandbox/check-courier-info?api_key=${encodeURIComponent(FRAUDBD_API_KEY)}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api_key': FRAUDBD_API_KEY,
-        'API-Key': FRAUDBD_API_KEY,
-        'X-Api-Key': FRAUDBD_API_KEY,
-      },
-      body: JSON.stringify({ phone_number: '01712345678', api_key: FRAUDBD_API_KEY })
-    });
-    const raw = await response.json();
-    console.log('[FraudBD Sandbox]', JSON.stringify(raw));
-    res.json({ sandbox: true, raw });
-  } catch (e) {
-    res.json({ sandbox: true, error: e.message });
-  }
-});
 
 app.put('/api/orders/:id/fraud', async (req, res) => {
   const { id } = req.params;
