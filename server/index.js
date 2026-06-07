@@ -1212,22 +1212,36 @@ app.get('/api/dashboard/summary', async (req, res) => {
 // --- FRAUDBD INTEGRATION - PROTECTED ---
 // =============================================
 
+const normalizePhone = (phone) => {
+  let cleaned = String(phone || '').replace(/[\s\-\(\)]/g, '');
+  if (cleaned.startsWith('+880')) cleaned = '0' + cleaned.slice(4);
+  else if (cleaned.startsWith('880') && cleaned.length === 13) cleaned = '0' + cleaned.slice(3);
+  return cleaned;
+};
+
 const checkFraud = async (phone_number) => {
+  const normalized = normalizePhone(phone_number);
+  const FRAUDBD_API_KEY = process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
+  console.log(`[FraudBD] Checking phone: "${normalized}" (original: "${phone_number}")`);
   try {
     const response = await fetch('https://fraudbd.com/api/check-courier-info', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api_key': process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df'
+        'api_key': FRAUDBD_API_KEY
       },
-      body: JSON.stringify({ phone_number })
+      body: JSON.stringify({ phone_number: normalized })
     });
     const data = await response.json();
+    console.log(`[FraudBD] Response for ${normalized}:`, JSON.stringify(data));
     if (data.status && data.data?.totalSummary) {
       return data.data.totalSummary;
     }
+    if (!data.status) {
+      console.warn(`[FraudBD] API returned false status for ${normalized}: ${data.message}`);
+    }
   } catch (e) {
-    console.error('FraudBD error:', e.message);
+    console.error(`[FraudBD] Fetch error for ${normalized}:`, e.message);
   }
   return { total: 0, success: 0, successRate: null };
 };
