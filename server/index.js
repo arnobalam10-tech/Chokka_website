@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { createClient } = require('@supabase/supabase-js');
+const https = require('https');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -1219,29 +1220,47 @@ const normalizePhone = (phone) => {
   return cleaned;
 };
 
-const checkFraud = async (phone_number) => {
-  const normalized = normalizePhone(phone_number);
-  const FRAUDBD_API_KEY = process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
-  console.log(`[FraudBD] Checking phone: "${normalized}" (original: "${phone_number}")`);
-  try {
-    const response = await fetch('https://fraudbd.com/api/check-courier-info', {
+const FRAUDBD_API_KEY = process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
+
+// Use https.request instead of fetch — nginx on fraudbd.com drops underscore
+// headers when routed through the Fetch API layer; https.request sends them as-is.
+const callFraudBDRaw = (phone_number) => {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ phone_number });
+    const options = {
+      hostname: 'fraudbd.com',
+      path: '/api/check-courier-info',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
         'api_key': FRAUDBD_API_KEY
-      },
-      body: JSON.stringify({ phone_number: normalized })
+      }
+    };
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(new Error('JSON parse error: ' + data.slice(0, 200))); }
+      });
     });
-    const data = await response.json();
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+};
+
+const checkFraud = async (phone_number) => {
+  const normalized = normalizePhone(phone_number);
+  console.log(`[FraudBD] Checking: "${normalized}"`);
+  try {
+    const data = await callFraudBDRaw(normalized);
     console.log(`[FraudBD] Response for ${normalized}:`, JSON.stringify(data));
-    if (data.status && data.data?.totalSummary) {
-      return data.data.totalSummary;
-    }
-    if (!data.status) {
-      console.warn(`[FraudBD] API returned false status for ${normalized}: ${data.message}`);
-    }
+    if (data.status && data.data?.totalSummary) return data.data.totalSummary;
+    console.warn(`[FraudBD] status false for ${normalized}: ${data.message}`);
   } catch (e) {
-    console.error(`[FraudBD] Fetch error for ${normalized}:`, e.message);
+    console.error(`[FraudBD] Error for ${normalized}:`, e.message);
   }
   return { total: 0, success: 0, successRate: null };
 };
@@ -1250,17 +1269,10 @@ app.post('/api/fraud-check', async (req, res) => {
   const { phone_number } = req.body;
   if (!phone_number) return res.status(400).json({ error: 'phone_number required' });
   const normalized = normalizePhone(phone_number);
-  const FRAUDBD_API_KEY = process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
   console.log(`[FraudBD] Proxy call for: "${normalized}"`);
   try {
-    const response = await fetch('https://fraudbd.com/api/check-courier-info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api_key': FRAUDBD_API_KEY },
-      body: JSON.stringify({ phone_number: normalized })
-    });
-    const raw = await response.json();
+    const raw = await callFraudBDRaw(normalized);
     console.log(`[FraudBD] Raw response:`, JSON.stringify(raw));
-    // Return the full raw FraudBD response — client does the parsing
     res.json({ ok: true, raw, phone: normalized });
   } catch (e) {
     console.error(`[FraudBD] Proxy error:`, e.message);
