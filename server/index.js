@@ -1222,34 +1222,21 @@ const normalizePhone = (phone) => {
 
 const FRAUDBD_API_KEY = process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
 
-// fraudbd.com drops underscore headers (api_key) at the proxy/CDN level.
-// Send the key as a query parameter — it cannot be stripped there.
-const callFraudBDRaw = (phone_number) => {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ phone_number });
-    const path = `/api/check-courier-info?api_key=${encodeURIComponent(FRAUDBD_API_KEY)}`;
-    const options = {
-      hostname: 'fraudbd.com',
-      path,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-        'api_key': FRAUDBD_API_KEY
-      }
-    };
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch (e) { reject(new Error('JSON parse error: ' + data.slice(0, 200))); }
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
+// Send api_key via every possible mechanism simultaneously —
+// header (multiple casings), query param, and request body.
+const callFraudBDRaw = async (phone_number) => {
+  const url = `https://fraudbd.com/api/check-courier-info?api_key=${encodeURIComponent(FRAUDBD_API_KEY)}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api_key': FRAUDBD_API_KEY,
+      'API-Key': FRAUDBD_API_KEY,
+      'X-Api-Key': FRAUDBD_API_KEY,
+    },
+    body: JSON.stringify({ phone_number, api_key: FRAUDBD_API_KEY })
   });
+  return response.json();
 };
 
 const checkFraud = async (phone_number) => {
@@ -1278,6 +1265,28 @@ app.post('/api/fraud-check', async (req, res) => {
   } catch (e) {
     console.error(`[FraudBD] Proxy error:`, e.message);
     res.json({ ok: false, error: e.message, phone: normalized });
+  }
+});
+
+// Sandbox test — hit GET /api/fraud-check/sandbox to verify key validity
+app.get('/api/fraud-check/sandbox', async (req, res) => {
+  try {
+    const url = `https://fraudbd.com/api/sandbox/check-courier-info?api_key=${encodeURIComponent(FRAUDBD_API_KEY)}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_key': FRAUDBD_API_KEY,
+        'API-Key': FRAUDBD_API_KEY,
+        'X-Api-Key': FRAUDBD_API_KEY,
+      },
+      body: JSON.stringify({ phone_number: '01712345678', api_key: FRAUDBD_API_KEY })
+    });
+    const raw = await response.json();
+    console.log('[FraudBD Sandbox]', JSON.stringify(raw));
+    res.json({ sandbox: true, raw });
+  } catch (e) {
+    res.json({ sandbox: true, error: e.message });
   }
 });
 
