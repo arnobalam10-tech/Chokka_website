@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
 const API_URL = 'https://chokka-server.onrender.com';
+const FRAUDBD_KEY = 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
 
 const adminFetch = (url, opts = {}) => {
   const token = localStorage.getItem('admin_token');
@@ -11,6 +12,13 @@ const adminFetch = (url, opts = {}) => {
   });
 };
 
+const normalizePhone = (phone) => {
+  let cleaned = String(phone || '').replace(/[\s\-\(\)]/g, '');
+  if (cleaned.startsWith('+880')) cleaned = '0' + cleaned.slice(4);
+  else if (cleaned.startsWith('880') && cleaned.length === 13) cleaned = '0' + cleaned.slice(3);
+  return cleaned;
+};
+
 export default function FraudBadge({ order, onUpdate }) {
   const [loading, setLoading] = useState(false);
   const fraudData = order.fraud_data;
@@ -18,13 +26,26 @@ export default function FraudBadge({ order, onUpdate }) {
   const handleCheck = async () => {
     setLoading(true);
     try {
-      const res = await adminFetch(`${API_URL}/api/fraud-check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: order.customer_phone })
-      });
-      const result = await res.json();
+      const phone = normalizePhone(order.customer_phone);
 
+      // Call FraudBD directly from the browser — avoids server-IP blocking
+      const fraudRes = await fetch('https://fraudbd.com/api/check-courier-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'api_key': FRAUDBD_KEY },
+        body: JSON.stringify({ phone_number: phone })
+      });
+      const fraudJson = await fraudRes.json();
+      console.log('[FraudBadge] FraudBD raw response:', fraudJson);
+
+      let result;
+      if (fraudJson.status && fraudJson.data?.totalSummary) {
+        result = fraudJson.data.totalSummary;
+      } else {
+        console.warn('[FraudBadge] FraudBD error:', fraudJson.message);
+        result = { total: 0, success: 0, successRate: null };
+      }
+
+      // Save to DB via our server
       await adminFetch(`${API_URL}/api/orders/${order.id}/fraud`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -33,7 +54,7 @@ export default function FraudBadge({ order, onUpdate }) {
 
       onUpdate(order.id, result);
     } catch (e) {
-      console.error('Fraud check error:', e);
+      console.error('[FraudBadge] Error:', e);
     } finally {
       setLoading(false);
     }
