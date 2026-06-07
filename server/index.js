@@ -1222,14 +1222,15 @@ const normalizePhone = (phone) => {
 
 const FRAUDBD_API_KEY = process.env.FRAUDBD_API_KEY || 'bb9499e03e7630a475de667b83b8b4ef1850c6b325bb0f757826d3d5ee73d6df';
 
-// Use https.request instead of fetch — nginx on fraudbd.com drops underscore
-// headers when routed through the Fetch API layer; https.request sends them as-is.
+// fraudbd.com drops underscore headers (api_key) at the proxy/CDN level.
+// Send the key as a query parameter — it cannot be stripped there.
 const callFraudBDRaw = (phone_number) => {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ phone_number });
+    const path = `/api/check-courier-info?api_key=${encodeURIComponent(FRAUDBD_API_KEY)}`;
     const options = {
       hostname: 'fraudbd.com',
-      path: '/api/check-courier-info',
+      path,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
